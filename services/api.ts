@@ -9,7 +9,7 @@ export const api = {
                 .from('inventory_items')
                 .select('*');
 
-            if (error) {
+            if (error || !data) {
                 console.error('Error fetching inventory:', error);
                 return [];
             }
@@ -111,7 +111,7 @@ export const api = {
                 .select('*')
                 .order('created_at', { ascending: false });
 
-            if (error) return [];
+            if (error || !data) return [];
 
             return data.map((t: any) => ({
                 id: t.id,
@@ -143,7 +143,7 @@ export const api = {
 
         async getAll(): Promise<AuditLogEntry[]> {
             const { data, error } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false });
-            if (error) return [];
+            if (error || !data) return [];
             return data.map((l: any) => ({
                 id: l.id,
                 timestamp: l.created_at,
