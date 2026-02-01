@@ -56,8 +56,8 @@ export const RestockModule: React.FC<RestockModuleProps> = ({ inventory, onCommi
                                 type="button"
                                 onClick={() => { setProduct(p); setTargetId(''); }}
                                 className={`flex-1 py-2 text-sm rounded-md border transition-colors ${product === p
-                                        ? 'bg-green-50 border-green-500 text-green-700 font-medium'
-                                        : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+                                    ? 'bg-green-50 border-green-500 text-green-700 font-medium'
+                                    : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
                                     }`}
                             >
                                 {p.split(' ')[0]}
@@ -68,19 +68,32 @@ export const RestockModule: React.FC<RestockModuleProps> = ({ inventory, onCommi
 
                 <div>
                     <label className="block text-sm font-medium text-slate-700 mb-1">Target Tank / Location</label>
-                    <select
-                        value={targetId}
-                        onChange={(e) => setTargetId(e.target.value)}
-                        required
-                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-green-500"
-                    >
-                        <option value="">-- Select Tank to Fill --</option>
-                        {availableTanks.map(item => (
-                            <option key={item.id} value={item.id}>
-                                {item.location} (Cur: {item.currentVolume.toLocaleString()} / Max: {item.maxCapacity.toLocaleString()})
-                            </option>
-                        ))}
-                    </select>
+                    {inventory.length === 0 ? (
+                        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800">
+                            <p className="font-medium">No inventory tanks found</p>
+                            <p className="text-sm mt-1">
+                                Go to <strong>Inventory Ledger</strong> first and add tanks/storage units, then come back here to restock them.
+                            </p>
+                        </div>
+                    ) : availableTanks.length === 0 ? (
+                        <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg text-slate-600 text-sm">
+                            No tanks available for <strong>{product}</strong>. Select a different product or add tanks in Inventory Ledger.
+                        </div>
+                    ) : (
+                        <select
+                            value={targetId}
+                            onChange={(e) => setTargetId(e.target.value)}
+                            required
+                            className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-green-500"
+                        >
+                            <option value="">-- Select Tank to Fill --</option>
+                            {availableTanks.map(item => (
+                                <option key={item.id} value={item.id}>
+                                    {item.location} (Cur: {item.currentVolume.toLocaleString()} / Max: {item.maxCapacity.toLocaleString()})
+                                </option>
+                            ))}
+                        </select>
+                    )}
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
