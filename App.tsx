@@ -30,6 +30,8 @@ import { LocationsManager } from './components/LocationsManager';
 import { TankManager } from './components/TankManager';
 import { PricingManager } from './components/PricingManager';
 import { CustomerManager } from './components/CustomerManager';
+import { CacheStatus } from './components/CacheStatus';
+import { OfflineStatus } from './components/OfflineStatus';
 import { SignIn } from './components/SignIn';
 import { useAuth } from './context/AuthContext';
 import { COMPLIANCE_RULES } from './constants/compliance';
@@ -37,6 +39,8 @@ import { printReceipt, createReceiptData } from './utils/receiptPrinter';
 import { InventoryItem, Transaction, AuditLogEntry, UserRole, TransactionType, User } from './types';
 
 import { api } from './services/api';
+import { cacheManager } from './utils/cacheManager';
+import { offlineManager } from './utils/offlineManager';
 
 function App() {
   const { user: currentUser, loading: authLoading, signIn, signOut } = useAuth();
@@ -47,32 +51,84 @@ function App() {
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load Data on Mount and Tab Change
+  // Load Data on Mount and Tab Change with Offline Support
   useEffect(() => {
     const loadData = async () => {
-      // Only show full loading spinner on initial load or critical updates
-      // setIsLoading(true); 
+      setIsLoading(true);
       try {
-        const [invData, txData] = await Promise.all([
-          api.inventory.getAll(),
-          api.transactions.getAll()
-        ]);
-        setInventory(invData);
-        setTransactions(txData);
-
-        // Audit logs can be heavy, load only on initial mount or specific tab?
-        // For now, let's keep it simple and load all, but maybe separately for audit
+        if (offlineManager.isCurrentlyOnline()) {
+          // Online: Fetch fresh data from API
+          const [invData, txData] = await Promise.all([
+            api.inventory.getAll(),
+            api.transactions.getAll()
+          ]);
+          
+          setInventory(invData);
+          setTransactions(txData);
+          
+          // Cache data for offline use
+          offlineManager.cacheData('inventory', invData);
+          offlineManager.cacheData('transactions', txData);
+          
+          // Also fetch audit logs separately
+          api.audit.getAll()
+            .then(auditData => {
+              setAuditLogs(auditData);
+              offlineManager.cacheData('auditLogs', auditData);
+            })
+            .catch(console.error);
+            
+        } else {
+          // Offline: Use cached data
+          console.log('Loading cached data for offline use');
+          const cachedInventory = offlineManager.getCachedData('inventory');
+          const cachedTransactions = offlineManager.getCachedData('transactions');
+          const cachedAuditLogs = offlineManager.getCachedData('auditLogs');
+          
+          setInventory(cachedInventory);
+          setTransactions(cachedTransactions);
+          setAuditLogs(cachedAuditLogs);
+        }
       } catch (error) {
         console.error('Failed to load data:', error);
+        
+        // Fallback to cached data on error
+        const cachedInventory = offlineManager.getCachedData('inventory');
+        const cachedTransactions = offlineManager.getCachedData('transactions');
+        const cachedAuditLogs = offlineManager.getCachedData('auditLogs');
+        
+        if (cachedInventory.length > 0 || cachedTransactions.length > 0) {
+          console.log('Using cached data due to network error');
+          setInventory(cachedInventory);
+          setTransactions(cachedTransactions);
+          setAuditLogs(cachedAuditLogs);
+        }
       }
       setIsLoading(false);
     };
+    
     loadData();
-
-    // Also fetch audit logs separately on mount only to save bandwidth
-    api.audit.getAll().then(setAuditLogs).catch(console.error);
-
   }, [activeTab]);
+
+  // Initialize cache manager on app startup
+  useEffect(() => {
+    // Start cache manager when app loads
+    cacheManager.start();
+    
+    // Set up event listener for cache clearing notifications
+    const handleCacheCleared = (event: CustomEvent) => {
+      console.log('Cache cleared:', event.detail);
+      // Optionally show a toast notification or update UI
+    };
+    
+    window.addEventListener('cacheCleared', handleCacheCleared as EventListener);
+    
+    // Cleanup on component unmount
+    return () => {
+      cacheManager.stop();
+      window.removeEventListener('cacheCleared', handleCacheCleared as EventListener);
+    };
+  }, []); // Empty dependency array - run only once on mount
 
   // --- Data Filtering Logic based on Role & Location ---
   const getFilteredInventory = () => {
@@ -447,6 +503,8 @@ function App() {
                 Operational
               </span>
             </div>
+            <CacheStatus showInHeader={true} />
+            <OfflineStatus showInHeader={true} />
             <button className="p-2 text-slate-400 hover:text-indigo-600 transition-colors">
               <Settings className="w-5 h-5" />
             </button>

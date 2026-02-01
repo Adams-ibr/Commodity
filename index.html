@@ -29,6 +29,63 @@
 <body class="bg-slate-50 text-slate-900">
   <div id="root"></div>
   <script type="module" src="/index.tsx"></script>
-</body>
+  
+  <!-- Service Worker Registration for Offline Capabilities -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then((registration) => {
+            console.log('SW registered: ', registration);
+            
+            // Listen for service worker messages
+            navigator.serviceWorker.addEventListener('message', (event) => {
+              if (event.data && event.data.type === 'CACHE_CLEARED') {
+                console.log('Cache cleared by service worker');
+                // Dispatch custom event for components to react
+                window.dispatchEvent(new CustomEvent('cacheCleared', {
+                  detail: { source: 'serviceWorker', timestamp: new Date() }
+                }));
+              }
+              
+              if (event.data && event.data.type === 'BACK_ONLINE') {
+                console.log('Service worker detected back online');
+                // Dispatch custom event for offline manager
+                window.dispatchEvent(new CustomEvent('serviceWorkerOnline', {
+                  detail: { timestamp: event.data.timestamp }
+                }));
+              }
+            });
 
+            // Handle service worker updates
+            registration.addEventListener('updatefound', () => {
+              const newWorker = registration.installing;
+              if (newWorker) {
+                newWorker.addEventListener('statechange', () => {
+                  if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                    // New service worker is available
+                    console.log('New service worker available');
+                    window.dispatchEvent(new CustomEvent('serviceWorkerUpdate', {
+                      detail: { registration }
+                    }));
+                  }
+                });
+              }
+            });
+          })
+          .catch((registrationError) => {
+            console.log('SW registration failed: ', registrationError);
+          });
+      });
+
+      // Handle service worker controller change
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        console.log('Service worker controller changed');
+        window.location.reload();
+      });
+    } else {
+      console.log('Service workers are not supported');
+    }
+  </script>
+</body>
 </html>
