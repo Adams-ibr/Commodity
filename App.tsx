@@ -397,6 +397,7 @@ function App() {
             <>
               <NavItem id="locations" label="Locations" icon={MapPin} />
               <NavItem id="tanks" label="Tank Management" icon={Fuel} />
+              <NavItem id="pricing" label="Price Management" icon={DollarSign} />
             </>
           )}
         </div>
