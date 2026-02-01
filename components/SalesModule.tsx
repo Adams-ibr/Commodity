@@ -39,7 +39,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
         .filter(c => c.type === customerType)
         .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
 
-    const availableInventory = inventory.filter(i => i.product === product && i.currentVolume > 0);
+    const availableInventory = inventory.filter(i => i.product === product);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -212,8 +212,14 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
                                 >
                                     <option value="">-- Select Source --</option>
                                     {availableInventory.map(item => (
-                                        <option key={item.id} value={item.id}>
+                                        <option
+                                            key={item.id}
+                                            value={item.id}
+                                            disabled={item.currentVolume <= 0}
+                                            className={item.currentVolume <= 0 ? 'text-slate-400 bg-slate-50' : ''}
+                                        >
                                             {item.location} ({item.currentVolume.toLocaleString()} L)
+                                            {item.currentVolume <= 0 ? ' - Empty' : ''}
                                         </option>
                                     ))}
                                 </select>
