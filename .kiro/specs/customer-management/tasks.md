@@ -67,7 +67,7 @@
   - Test navigation between customer management and other modules
   - _Requirements: 1.1_
 
-- [-] 10. Implement audit logging for customer operations
+- [ ] 10. Implement audit logging for customer operations
   - Add audit trail logging for customer creation, updates, and deletions
   - Log customer status changes and permission modifications
   - Include customer information in transaction audit logs
