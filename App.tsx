@@ -215,11 +215,8 @@ function App() {
       updateInventoryState(newTx);
       addAuditLog('TRANSACTION_COMMIT', details);
 
-      // Prompt to print receipt
-      const shouldPrint = window.confirm('Transaction committed successfully!\n\nWould you like to print a receipt?');
-      if (shouldPrint) {
-        printReceipt(createReceiptData({ ...txData, refDoc: data.refDoc }, inventory));
-      }
+      // Auto-print receipt
+      printReceipt(createReceiptData({ ...txData, refDoc: data.refDoc }, inventory));
     } else {
       addAuditLog('TRANSACTION_SUBMIT', `${details} (Pending Approval)`);
       alert("Transaction submitted for approval.");

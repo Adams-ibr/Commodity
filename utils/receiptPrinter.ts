@@ -1,18 +1,18 @@
 import { Transaction, InventoryItem } from '../types';
 
 interface ReceiptData {
-    transaction: {
-        type: string;
-        product: string;
-        volume: number;
-        referenceDoc: string;
-        customerName?: string;
-        timestamp: string;
-        performedBy: string;
-        status: string;
-    };
-    location: string;
-    companyName?: string;
+  transaction: {
+    type: string;
+    product: string;
+    volume: number;
+    referenceDoc: string;
+    customerName?: string;
+    timestamp: string;
+    performedBy: string;
+    status: string;
+  };
+  location: string;
+  companyName?: string;
 }
 
 /**
@@ -20,19 +20,19 @@ interface ReceiptData {
  * Optimized for 80mm thermal printers
  */
 export const printReceipt = (data: ReceiptData) => {
-    const { transaction, location, companyName = 'Galaltix Energy' } = data;
-    const date = new Date(transaction.timestamp);
-    const formattedDate = date.toLocaleDateString('en-NG', {
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric'
-    });
-    const formattedTime = date.toLocaleTimeString('en-NG', {
-        hour: '2-digit',
-        minute: '2-digit'
-    });
+  const { transaction, location, companyName = 'Galaltix Energy' } = data;
+  const date = new Date(transaction.timestamp);
+  const formattedDate = date.toLocaleDateString('en-NG', {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric'
+  });
+  const formattedTime = date.toLocaleTimeString('en-NG', {
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 
-    const receiptHTML = `
+  const receiptHTML = `
     <!DOCTYPE html>
     <html>
     <head>
@@ -198,44 +198,58 @@ export const printReceipt = (data: ReceiptData) => {
     </html>
   `;
 
-    // Open print window
-    const printWindow = window.open('', '_blank', 'width=320,height=600');
-    if (printWindow) {
-        printWindow.document.write(receiptHTML);
-        printWindow.document.close();
+  // Create a hidden iframe
+  const iframe = document.createElement('iframe');
+  iframe.style.position = 'absolute';
+  iframe.style.width = '0px';
+  iframe.style.height = '0px';
+  iframe.style.border = 'none';
+  document.body.appendChild(iframe);
 
-        // Wait for content to load then print
-        printWindow.onload = () => {
-            printWindow.focus();
-            printWindow.print();
-            // Close after printing (optional - comment out to keep window open)
-            // printWindow.close();
-        };
-    } else {
-        alert('Please allow pop-ups to print receipts.');
-    }
+  // Get iframe document
+  const iframeDoc = iframe.contentWindow?.document;
+
+  if (iframeDoc) {
+    iframeDoc.open();
+    iframeDoc.write(receiptHTML);
+    iframeDoc.close();
+
+    // Print after content loads
+    iframe.onload = () => {
+      // Small delay to ensure styles render
+      setTimeout(() => {
+        iframe.contentWindow?.focus();
+        iframe.contentWindow?.print();
+
+        // Remove iframe after printing
+        // setTimeout(() => document.body.removeChild(iframe), 1000);
+      }, 500);
+    };
+  } else {
+    console.error('Failed to create print frame');
+  }
 };
 
 /**
  * Create receipt data from transaction result
  */
 export const createReceiptData = (
-    txData: any,
-    inventory: InventoryItem[]
+  txData: any,
+  inventory: InventoryItem[]
 ): ReceiptData => {
-    const sourceItem = inventory.find(i => i.id === txData.sourceId);
+  const sourceItem = inventory.find(i => i.id === txData.sourceId);
 
-    return {
-        transaction: {
-            type: txData.type,
-            product: txData.product,
-            volume: txData.volume,
-            referenceDoc: txData.refDoc || txData.referenceDoc || 'N/A',
-            customerName: txData.customerName,
-            timestamp: new Date().toISOString(),
-            performedBy: txData.performedBy || 'System',
-            status: txData.status || 'APPROVED'
-        },
-        location: sourceItem?.location || 'Unknown Location'
-    };
+  return {
+    transaction: {
+      type: txData.type,
+      product: txData.product,
+      volume: txData.volume,
+      referenceDoc: txData.refDoc || txData.referenceDoc || 'N/A',
+      customerName: txData.customerName,
+      timestamp: new Date().toISOString(),
+      performedBy: txData.performedBy || 'System',
+      status: txData.status || 'APPROVED'
+    },
+    location: sourceItem?.location || 'Unknown Location'
+  };
 };

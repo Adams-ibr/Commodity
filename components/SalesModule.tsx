@@ -194,19 +194,30 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Source Tank</label>
-                            <select
-                                value={sourceId}
-                                onChange={(e) => setSourceId(e.target.value)}
-                                required
-                                className="w-full px-3 py-2 border border-slate-300 rounded-md"
-                            >
-                                <option value="">-- Select Source --</option>
-                                {availableInventory.map(item => (
-                                    <option key={item.id} value={item.id}>
-                                        {item.location} ({item.currentVolume.toLocaleString()}L)
-                                    </option>
-                                ))}
-                            </select>
+                            {inventory.length === 0 ? (
+                                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+                                    <p className="font-medium">No tanks configured.</p>
+                                    <p className="text-xs mt-1">Go to <strong>Tank Management</strong> to specific tanks first.</p>
+                                </div>
+                            ) : availableInventory.length === 0 ? (
+                                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+                                    No active tanks with <strong>{product}</strong> stock available.
+                                </div>
+                            ) : (
+                                <select
+                                    value={sourceId}
+                                    onChange={(e) => setSourceId(e.target.value)}
+                                    required
+                                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500"
+                                >
+                                    <option value="">-- Select Source --</option>
+                                    {availableInventory.map(item => (
+                                        <option key={item.id} value={item.id}>
+                                            {item.location} ({item.currentVolume.toLocaleString()} L)
+                                        </option>
+                                    ))}
+                                </select>
+                            )}
                         </div>
                     </div>
 
