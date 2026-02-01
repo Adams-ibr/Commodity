@@ -80,7 +80,7 @@ export const SignUp: React.FC<SignUpProps> = ({ onSwitchToSignIn, onSignUp }) =>
                     </div>
                     <h1 className="text-2xl font-bold text-white mb-2 tracking-tight">Create Your Account</h1>
                     <p className="text-indigo-200/80 text-sm">
-                        Join Marhaba Gas Inventory System
+                        Join Galaltix Energy Inventory System
                     </p>
                 </div>
 

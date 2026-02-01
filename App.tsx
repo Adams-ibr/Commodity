@@ -354,7 +354,7 @@ function App() {
             <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center">
               <Database className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-bold tracking-tight">Marhaba Gas Limited</span>
+            <span className="text-xl font-bold tracking-tight">Galaltix Energy</span>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-indigo-300">
             <X className="w-6 h-6" />
