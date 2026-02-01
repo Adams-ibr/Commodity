@@ -18,6 +18,8 @@ import { SalesModule } from './components/SalesModule';
 import { RestockModule } from './components/RestockModule';
 import { ComplianceDashboard } from './components/ComplianceDashboard';
 import { SignIn } from './components/SignIn';
+import { SignUp } from './components/SignUp';
+import { useAuth } from './context/AuthContext';
 import {
   mockInventory,
   mockTransactions,
@@ -29,12 +31,13 @@ import { InventoryItem, Transaction, AuditLogEntry, UserRole, TransactionType, U
 import { api } from './services/api';
 
 function App() {
+  const { user: currentUser, loading: authLoading, signIn, signUp, signOut } = useAuth();
+  const [authView, setAuthView] = useState<'signin' | 'signup'>('signin');
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
   // Load Data on Mount
@@ -250,13 +253,26 @@ function App() {
     alert("Transaction approved and ledger updated.");
   };
 
-  const handleLogout = () => {
-    setCurrentUser(null);
+  const handleLogout = async () => {
+    await signOut();
     setActiveTab('dashboard');
   };
 
+  // Show loading state
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  // Show auth views if not logged in
   if (!currentUser) {
-    return <SignIn onLogin={setCurrentUser} />;
+    if (authView === 'signup') {
+      return <SignUp onSwitchToSignIn={() => setAuthView('signin')} onSignUp={signUp} />;
+    }
+    return <SignIn onSwitchToSignUp={() => setAuthView('signup')} onSignIn={signIn} />;
   }
 
   // Define contents based on active tab
