@@ -305,43 +305,87 @@ export const api = {
         },
 
         async create(customer: Omit<Customer, 'id'>): Promise<Customer | null> {
-            const { data, error } = await supabase
-                .from('customers')
-                .insert([{
-                    name: customer.name,
-                    type: customer.type,
-                    contact_phone: customer.contactInfo?.phone,
-                    contact_email: customer.contactInfo?.email,
-                    address: customer.contactInfo?.address,
-                    status: customer.status,
-                    notes: customer.notes,
-                    total_purchases: customer.totalPurchases,
-                    average_transaction_size: customer.averageTransactionSize
-                }])
-                .select()
-                .single();
+            try {
+                const { data, error } = await supabase
+                    .from('customers')
+                    .insert([{
+                        name: customer.name,
+                        type: customer.type,
+                        contact_phone: customer.contactInfo?.phone || null,
+                        contact_email: customer.contactInfo?.email || null,
+                        address: customer.contactInfo?.address || null,
+                        status: customer.status || 'Active',
+                        notes: customer.notes || null,
+                        total_purchases: customer.totalPurchases || 0,
+                        average_transaction_size: customer.averageTransactionSize || 0,
+                        is_active: true
+                    }])
+                    .select()
+                    .single();
 
-            if (error) {
-                console.error('Error creating customer:', error);
+                if (error) {
+                    console.error('Error creating customer:', error);
+                    // If it's a column doesn't exist error, try with basic fields only
+                    if (error.message.includes('column') && error.message.includes('does not exist')) {
+                        console.log('Falling back to basic customer creation...');
+                        const { data: basicData, error: basicError } = await supabase
+                            .from('customers')
+                            .insert([{
+                                name: customer.name,
+                                type: customer.type,
+                                contact_phone: customer.contactInfo?.phone || null,
+                                contact_email: customer.contactInfo?.email || null,
+                                address: customer.contactInfo?.address || null,
+                                is_active: true
+                            }])
+                            .select()
+                            .single();
+
+                        if (basicError) {
+                            console.error('Error creating customer with basic fields:', basicError);
+                            return null;
+                        }
+
+                        return {
+                            id: basicData.id,
+                            name: basicData.name,
+                            type: basicData.type as CustomerType,
+                            contactInfo: {
+                                phone: basicData.contact_phone,
+                                email: basicData.contact_email,
+                                address: basicData.address
+                            },
+                            status: 'Active',
+                            createdDate: basicData.created_at,
+                            lastTransactionDate: null,
+                            totalPurchases: 0,
+                            averageTransactionSize: 0,
+                            notes: null
+                        };
+                    }
+                    return null;
+                }
+
+                return {
+                    id: data.id,
+                    name: data.name,
+                    type: data.type as CustomerType,
+                    contactInfo: {
+                        phone: data.contact_phone,
+                        email: data.contact_email,
+                        address: data.address
+                    },
+                    status: data.status || 'Active',
+                    createdDate: data.created_at,
+                    lastTransactionDate: data.last_transaction_date,
+                    totalPurchases: Number(data.total_purchases) || 0,
+                    averageTransactionSize: Number(data.average_transaction_size) || 0,
+                    notes: data.notes
+                };
+            } catch (error) {
+                console.error('Unexpected error creating customer:', error);
                 return null;
             }
-
-            return {
-                id: data.id,
-                name: data.name,
-                type: data.type as CustomerType,
-                contactInfo: {
-                    phone: data.contact_phone,
-                    email: data.contact_email,
-                    address: data.address
-                },
-                status: data.status,
-                createdDate: data.created_at,
-                lastTransactionDate: data.last_transaction_date,
-                totalPurchases: Number(data.total_purchases) || 0,
-                averageTransactionSize: Number(data.average_transaction_size) || 0,
-                notes: data.notes
-            };
         },
 
         async update(customer: Customer): Promise<Customer | null> {
