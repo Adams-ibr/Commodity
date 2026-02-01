@@ -16,7 +16,8 @@ interface CustomerManagerProps {
 export const CustomerManager: React.FC<CustomerManagerProps> = ({
   userRole,
   transactions,
-  onCustomerSelect
+  onCustomerSelect,
+  onAuditLog
 }) => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -124,8 +125,10 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
         const updatedCustomer = customerData as Customer;
         setCustomers(prev => prev.map(c => c.id === updatedCustomer.id ? updatedCustomer : c));
         
-        // TODO: Add audit log
-        // addAuditLog('CUSTOMER_UPDATE', `Updated customer: ${updatedCustomer.name}`);
+        // Add audit log
+        if (onAuditLog) {
+          onAuditLog('CUSTOMER_UPDATE', `Updated customer: ${updatedCustomer.name}`);
+        }
         
         console.log('Customer updated:', updatedCustomer);
       } else {
@@ -140,8 +143,10 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
         
         setCustomers(prev => [...prev, newCustomer]);
         
-        // TODO: Add audit log
-        // addAuditLog('CUSTOMER_CREATE', `Created new customer: ${newCustomer.name}`);
+        // Add audit log
+        if (onAuditLog) {
+          onAuditLog('CUSTOMER_CREATE', `Created new customer: ${newCustomer.name}`);
+        }
         
         console.log('Customer created:', newCustomer);
       }
@@ -180,8 +185,10 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
       
       setCustomers(prev => prev.filter(c => c.id !== customerId));
       
-      // TODO: Add audit log
-      // addAuditLog('CUSTOMER_DELETE', `Deleted customer: ${customer.name}`);
+      // Add audit log
+      if (onAuditLog) {
+        onAuditLog('CUSTOMER_DELETE', `Deleted customer: ${customer.name}`);
+      }
       
       console.log('Customer deleted:', customer.name);
     } catch (error) {
@@ -203,8 +210,10 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
       setCustomers(prev => prev.map(c => c.id === customerId ? updatedCustomer : c));
       setSelectedCustomer(updatedCustomer);
       
-      // TODO: Add audit log
-      // addAuditLog('CUSTOMER_STATUS_CHANGE', `Changed customer ${customer.name} status to ${status}`);
+      // Add audit log
+      if (onAuditLog) {
+        onAuditLog('CUSTOMER_STATUS_CHANGE', `Changed customer ${customer.name} status to ${status}`);
+      }
       
       console.log('Customer status updated:', updatedCustomer);
     } catch (error) {

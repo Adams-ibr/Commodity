@@ -325,7 +325,7 @@ function App() {
       case 'sales':
         return <SalesModule inventory={visibleInventory} onCommitTransaction={handleTransactionCommit} />;
       case 'customers':
-        return <CustomerManager userRole={currentUser.role} transactions={visibleTransactions} />;
+        return <CustomerManager userRole={currentUser.role} transactions={visibleTransactions} onAuditLog={addAuditLog} />;
       case 'restock':
         return <RestockModule inventory={visibleInventory} onCommitTransaction={handleTransactionCommit} />;
       case 'compliance':
