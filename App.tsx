@@ -18,16 +18,15 @@ import { SalesModule } from './components/SalesModule';
 import { RestockModule } from './components/RestockModule';
 import { ComplianceDashboard } from './components/ComplianceDashboard';
 import { SignIn } from './components/SignIn';
-import { SignUp } from './components/SignUp';
 import { useAuth } from './context/AuthContext';
 import { COMPLIANCE_RULES } from './constants/compliance';
+import { printReceipt, createReceiptData } from './utils/receiptPrinter';
 import { InventoryItem, Transaction, AuditLogEntry, UserRole, TransactionType, User } from './types';
 
 import { api } from './services/api';
 
 function App() {
-  const { user: currentUser, loading: authLoading, signIn, signUp, signOut } = useAuth();
-  const [authView, setAuthView] = useState<'signin' | 'signup'>('signin');
+  const { user: currentUser, loading: authLoading, signIn, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
@@ -211,7 +210,12 @@ function App() {
     if (status === 'APPROVED') {
       updateInventoryState(newTx);
       addAuditLog('TRANSACTION_COMMIT', details);
-      alert("Transaction committed successfully.");
+
+      // Prompt to print receipt
+      const shouldPrint = window.confirm('Transaction committed successfully!\n\nWould you like to print a receipt?');
+      if (shouldPrint) {
+        printReceipt(createReceiptData({ ...txData, refDoc: data.refDoc }, inventory));
+      }
     } else {
       addAuditLog('TRANSACTION_SUBMIT', `${details} (Pending Approval)`);
       alert("Transaction submitted for approval.");
@@ -262,12 +266,9 @@ function App() {
     );
   }
 
-  // Show auth views if not logged in
+  // Show SignIn if not logged in (internal app - no sign up)
   if (!currentUser) {
-    if (authView === 'signup') {
-      return <SignUp onSwitchToSignIn={() => setAuthView('signin')} onSignUp={signUp} />;
-    }
-    return <SignIn onSwitchToSignUp={() => setAuthView('signup')} onSignIn={signIn} />;
+    return <SignIn onSignIn={signIn} />;
   }
 
   // Define contents based on active tab

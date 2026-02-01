@@ -1,13 +1,11 @@
 import React, { useState } from 'react';
-import { UserRole } from '../types';
-import { Shield, Mail, Lock, Eye, EyeOff, ArrowRight, UserPlus } from 'lucide-react';
+import { Shield, Mail, Lock, Eye, EyeOff, ArrowRight } from 'lucide-react';
 
 interface SignInProps {
-  onSwitchToSignUp: () => void;
   onSignIn: (email: string, password: string) => Promise<string | null>;
 }
 
-export const SignIn: React.FC<SignInProps> = ({ onSwitchToSignUp, onSignIn }) => {
+export const SignIn: React.FC<SignInProps> = ({ onSignIn }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -116,28 +114,15 @@ export const SignIn: React.FC<SignInProps> = ({ onSwitchToSignUp, onSignIn }) =>
               )}
             </button>
           </form>
-
-          {/* Divider */}
-          <div className="my-6 flex items-center">
-            <div className="flex-1 border-t border-white/20"></div>
-            <span className="px-4 text-sm text-indigo-300/50">or</span>
-            <div className="flex-1 border-t border-white/20"></div>
-          </div>
-
-          {/* Sign Up Link */}
-          <button
-            onClick={onSwitchToSignUp}
-            className="w-full py-3 px-4 bg-white/5 hover:bg-white/10 border border-white/20 text-indigo-100 font-medium rounded-xl transition-all duration-300 flex items-center justify-center space-x-2"
-          >
-            <UserPlus className="w-5 h-5" />
-            <span>Create New Account</span>
-          </button>
         </div>
 
         {/* Footer */}
         <div className="mt-8 text-center">
           <p className="text-xs text-indigo-300/50 uppercase tracking-widest font-semibold">
             Protected by Enterprise Grade Security
+          </p>
+          <p className="text-xs text-indigo-300/30 mt-2">
+            Contact your administrator for access
           </p>
         </div>
       </div>
