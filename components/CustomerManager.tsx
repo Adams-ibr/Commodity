@@ -4,11 +4,13 @@ import { CustomerList } from './CustomerList';
 import { CustomerForm } from './CustomerForm';
 import { CustomerDetails } from './CustomerDetails';
 import { Customer, Transaction, UserRole } from '../types';
+import { api } from '../services/api';
 
 interface CustomerManagerProps {
   userRole: UserRole;
   transactions: Transaction[];
   onCustomerSelect?: (customer: Customer) => void;
+  onAuditLog?: (action: string, details: string) => void;
 }
 
 export const CustomerManager: React.FC<CustomerManagerProps> = ({

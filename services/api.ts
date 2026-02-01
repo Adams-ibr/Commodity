@@ -250,7 +250,6 @@ export const api = {
             const { data, error } = await supabase
                 .from('customers')
                 .select('*')
-                .eq('is_active', true)
                 .order('name');
 
             if (error || !data) {
@@ -261,10 +260,48 @@ export const api = {
                 id: c.id,
                 name: c.name,
                 type: c.type as CustomerType,
-                contactInfo: c.contact_phone,
-                contactEmail: c.contact_email,
-                address: c.address
+                contactInfo: {
+                    phone: c.contact_phone,
+                    email: c.contact_email,
+                    address: c.address
+                },
+                status: c.status || 'Active',
+                createdDate: c.created_at,
+                lastTransactionDate: c.last_transaction_date,
+                totalPurchases: Number(c.total_purchases) || 0,
+                averageTransactionSize: Number(c.average_transaction_size) || 0,
+                notes: c.notes
             }));
+        },
+
+        async getById(id: string): Promise<Customer | null> {
+            const { data, error } = await supabase
+                .from('customers')
+                .select('*')
+                .eq('id', id)
+                .single();
+
+            if (error || !data) {
+                console.error('Error fetching customer:', error);
+                return null;
+            }
+
+            return {
+                id: data.id,
+                name: data.name,
+                type: data.type as CustomerType,
+                contactInfo: {
+                    phone: data.contact_phone,
+                    email: data.contact_email,
+                    address: data.address
+                },
+                status: data.status || 'Active',
+                createdDate: data.created_at,
+                lastTransactionDate: data.last_transaction_date,
+                totalPurchases: Number(data.total_purchases) || 0,
+                averageTransactionSize: Number(data.average_transaction_size) || 0,
+                notes: data.notes
+            };
         },
 
         async create(customer: Omit<Customer, 'id'>): Promise<Customer | null> {
@@ -273,8 +310,13 @@ export const api = {
                 .insert([{
                     name: customer.name,
                     type: customer.type,
-                    contact_phone: customer.contactInfo,
-                    address: (customer as any).address
+                    contact_phone: customer.contactInfo?.phone,
+                    contact_email: customer.contactInfo?.email,
+                    address: customer.contactInfo?.address,
+                    status: customer.status,
+                    notes: customer.notes,
+                    total_purchases: customer.totalPurchases,
+                    average_transaction_size: customer.averageTransactionSize
                 }])
                 .select()
                 .single();
@@ -283,41 +325,250 @@ export const api = {
                 console.error('Error creating customer:', error);
                 return null;
             }
+
             return {
                 id: data.id,
                 name: data.name,
                 type: data.type as CustomerType,
-                contactInfo: data.contact_phone
+                contactInfo: {
+                    phone: data.contact_phone,
+                    email: data.contact_email,
+                    address: data.address
+                },
+                status: data.status,
+                createdDate: data.created_at,
+                lastTransactionDate: data.last_transaction_date,
+                totalPurchases: Number(data.total_purchases) || 0,
+                averageTransactionSize: Number(data.average_transaction_size) || 0,
+                notes: data.notes
             };
         },
 
-        async update(id: string, updates: Partial<Customer>): Promise<boolean> {
-            const { error } = await supabase
+        async update(customer: Customer): Promise<Customer | null> {
+            const { data, error } = await supabase
                 .from('customers')
                 .update({
-                    name: updates.name,
-                    type: updates.type,
-                    contact_phone: updates.contactInfo
+                    name: customer.name,
+                    type: customer.type,
+                    contact_phone: customer.contactInfo?.phone,
+                    contact_email: customer.contactInfo?.email,
+                    address: customer.contactInfo?.address,
+                    status: customer.status,
+                    notes: customer.notes,
+                    total_purchases: customer.totalPurchases,
+                    average_transaction_size: customer.averageTransactionSize,
+                    updated_at: new Date().toISOString()
                 })
-                .eq('id', id);
+                .eq('id', customer.id)
+                .select()
+                .single();
 
             if (error) {
                 console.error('Error updating customer:', error);
-                return false;
+                return null;
             }
-            return true;
+
+            return {
+                id: data.id,
+                name: data.name,
+                type: data.type as CustomerType,
+                contactInfo: {
+                    phone: data.contact_phone,
+                    email: data.contact_email,
+                    address: data.address
+                },
+                status: data.status,
+                createdDate: data.created_at,
+                lastTransactionDate: data.last_transaction_date,
+                totalPurchases: Number(data.total_purchases) || 0,
+                averageTransactionSize: Number(data.average_transaction_size) || 0,
+                notes: data.notes
+            };
         },
 
         async delete(id: string): Promise<boolean> {
             const { error } = await supabase
                 .from('customers')
-                .update({ is_active: false })
+                .delete()
                 .eq('id', id);
 
             if (error) {
-                console.error('Error deactivating customer:', error);
+                console.error('Error deleting customer:', error);
                 return false;
             }
+            return true;
+        },
+
+        async getTransactionHistory(customerId: string): Promise<Transaction[]> {
+            const { data, error } = await supabase
+                .from('transactions')
+                .select('*')
+                .eq('customer_id', customerId)
+                .order('created_at', { ascending: false });
+
+            if (error || !data) {
+                console.error('Error fetching customer transactions:', error);
+                return [];
+            }
+
+            return data.map((t: any) => ({
+                id: t.id,
+                type: t.type,
+                product: t.product,
+                volume: Number(t.volume),
+                source: t.source_id,
+                destination: t.destination,
+                timestamp: t.created_at,
+                performedBy: t.performed_by,
+                referenceDoc: t.reference_doc,
+                status: t.status,
+                customerId: t.customer_id,
+                customerName: t.customer_name
+            }));
+        },
+
+        async getStats(): Promise<any> {
+            // Get total customers
+            const { data: allCustomers, error: customersError } = await supabase
+                .from('customers')
+                .select('id, status, type');
+
+            if (customersError) {
+                console.error('Error fetching customer stats:', customersError);
+                return {
+                    totalCustomers: 0,
+                    activeCustomers: 0,
+                    dealerCount: 0,
+                    endUserCount: 0,
+                    topCustomers: [],
+                    recentTransactions: []
+                };
+            }
+
+            const totalCustomers = allCustomers?.length || 0;
+            const activeCustomers = allCustomers?.filter(c => c.status === 'Active').length || 0;
+            const dealerCount = allCustomers?.filter(c => c.type === CustomerType.DEALER).length || 0;
+            const endUserCount = allCustomers?.filter(c => c.type === CustomerType.END_USER).length || 0;
+
+            // Get top customers by total purchases
+            const { data: topCustomersData } = await supabase
+                .from('customers')
+                .select('*')
+                .order('total_purchases', { ascending: false })
+                .limit(5);
+
+            const topCustomers = topCustomersData?.map((c: any) => ({
+                id: c.id,
+                name: c.name,
+                type: c.type as CustomerType,
+                contactInfo: {
+                    phone: c.contact_phone,
+                    email: c.contact_email,
+                    address: c.address
+                },
+                status: c.status,
+                createdDate: c.created_at,
+                lastTransactionDate: c.last_transaction_date,
+                totalPurchases: Number(c.total_purchases) || 0,
+                averageTransactionSize: Number(c.average_transaction_size) || 0,
+                notes: c.notes
+            })) || [];
+
+            // Get recent transactions
+            const { data: recentTransactionsData } = await supabase
+                .from('transactions')
+                .select('*')
+                .not('customer_id', 'is', null)
+                .order('created_at', { ascending: false })
+                .limit(10);
+
+            const recentTransactions = recentTransactionsData?.map((t: any) => ({
+                id: t.id,
+                type: t.type,
+                product: t.product,
+                volume: Number(t.volume),
+                source: t.source_id,
+                destination: t.destination,
+                timestamp: t.created_at,
+                performedBy: t.performed_by,
+                referenceDoc: t.reference_doc,
+                status: t.status,
+                customerId: t.customer_id,
+                customerName: t.customer_name
+            })) || [];
+
+            return {
+                totalCustomers,
+                activeCustomers,
+                dealerCount,
+                endUserCount,
+                topCustomers,
+                recentTransactions
+            };
+        },
+
+        async search(query: string): Promise<Customer[]> {
+            const { data, error } = await supabase
+                .from('customers')
+                .select('*')
+                .or(`name.ilike.%${query}%,contact_phone.ilike.%${query}%,contact_email.ilike.%${query}%,address.ilike.%${query}%`)
+                .order('name');
+
+            if (error || !data) {
+                console.error('Error searching customers:', error);
+                return [];
+            }
+
+            return data.map((c: any) => ({
+                id: c.id,
+                name: c.name,
+                type: c.type as CustomerType,
+                contactInfo: {
+                    phone: c.contact_phone,
+                    email: c.contact_email,
+                    address: c.address
+                },
+                status: c.status || 'Active',
+                createdDate: c.created_at,
+                lastTransactionDate: c.last_transaction_date,
+                totalPurchases: Number(c.total_purchases) || 0,
+                averageTransactionSize: Number(c.average_transaction_size) || 0,
+                notes: c.notes
+            }));
+        },
+
+        async updateStats(customerId: string): Promise<boolean> {
+            // Calculate customer statistics from transactions
+            const { data: transactions } = await supabase
+                .from('transactions')
+                .select('volume, created_at')
+                .eq('customer_id', customerId)
+                .eq('status', 'APPROVED');
+
+            if (!transactions || transactions.length === 0) {
+                return true; // No transactions, stats remain at 0
+            }
+
+            const totalVolume = transactions.reduce((sum, t) => sum + Number(t.volume), 0);
+            const averageTransactionSize = totalVolume / transactions.length;
+            const lastTransactionDate = transactions
+                .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())[0]
+                .created_at;
+
+            const { error } = await supabase
+                .from('customers')
+                .update({
+                    total_purchases: totalVolume,
+                    average_transaction_size: averageTransactionSize,
+                    last_transaction_date: lastTransactionDate
+                })
+                .eq('id', customerId);
+
+            if (error) {
+                console.error('Error updating customer stats:', error);
+                return false;
+            }
+
             return true;
         }
     },

@@ -86,7 +86,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
         const newCustomer = await api.customers.create({
             name: newCustomerName.trim(),
             type: customerType,
-            contactInfo: newCustomerPhone.trim() || undefined
+            contactInfo: {
+                phone: newCustomerPhone.trim() || undefined
+            },
+            status: 'Active',
+            createdDate: new Date().toISOString(),
+            totalPurchases: 0,
+            averageTransactionSize: 0
         });
 
         if (newCustomer) {
@@ -190,8 +196,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
                             <div className="mt-2 p-2 bg-slate-50 rounded border border-slate-200 text-sm">
                                 <div className="flex items-center gap-2 text-slate-600">
                                     <Phone className="w-4 h-4" />
-                                    <span>{selectedCustomerDetails.contactInfo || 'No phone'}</span>
+                                    <span>{selectedCustomerDetails.contactInfo?.phone || 'No phone'}</span>
                                 </div>
+                                {selectedCustomerDetails.contactInfo?.email && (
+                                    <div className="text-xs text-slate-500 mt-1">
+                                        Email: {selectedCustomerDetails.contactInfo.email}
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>
