@@ -38,26 +38,32 @@ function App() {
   const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
-  // Load Data on Mount
+  // Load Data on Mount and Tab Change
   useEffect(() => {
     const loadData = async () => {
-      setIsLoading(true);
+      // Only show full loading spinner on initial load or critical updates
+      // setIsLoading(true); 
       try {
-        const [invData, txData, logData] = await Promise.all([
+        const [invData, txData] = await Promise.all([
           api.inventory.getAll(),
-          api.transactions.getAll(),
-          api.audit.getAll()
+          api.transactions.getAll()
         ]);
         setInventory(invData);
         setTransactions(txData);
-        setAuditLogs(logData);
+
+        // Audit logs can be heavy, load only on initial mount or specific tab?
+        // For now, let's keep it simple and load all, but maybe separately for audit
       } catch (error) {
         console.error('Failed to load data:', error);
       }
       setIsLoading(false);
     };
     loadData();
-  }, []);
+
+    // Also fetch audit logs separately on mount only to save bandwidth
+    api.audit.getAll().then(setAuditLogs).catch(console.error);
+
+  }, [activeTab]);
 
   // --- Data Filtering Logic based on Role & Location ---
   const getFilteredInventory = () => {
