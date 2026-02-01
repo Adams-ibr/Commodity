@@ -1,5 +1,15 @@
 import { supabase } from './supabaseClient';
-import { InventoryItem, Transaction, AuditLogEntry, ProductType, TransactionType, UserRole } from '../types';
+import { InventoryItem, Transaction, AuditLogEntry, ProductType, TransactionType, UserRole, Customer, CustomerType } from '../types';
+
+// Location type for API
+export interface Location {
+    id: string;
+    name: string;
+    type: 'Depot' | 'Station';
+    address?: string;
+    isActive: boolean;
+    createdAt: string;
+}
 
 // Inventory Service
 export const api = {
@@ -154,5 +164,162 @@ export const api = {
                 ipHash: l.ip_hash
             }));
         }
+    },
+
+    locations: {
+        async getAll(): Promise<Location[]> {
+            const { data, error } = await supabase
+                .from('locations')
+                .select('*')
+                .order('name');
+
+            if (error || !data) {
+                console.error('Error fetching locations:', error);
+                return [];
+            }
+            return data.map((l: any) => ({
+                id: l.id,
+                name: l.name,
+                type: l.type,
+                address: l.address,
+                isActive: l.is_active,
+                createdAt: l.created_at
+            }));
+        },
+
+        async create(location: Omit<Location, 'id' | 'createdAt'>): Promise<Location | null> {
+            const { data, error } = await supabase
+                .from('locations')
+                .insert([{
+                    name: location.name,
+                    type: location.type,
+                    address: location.address,
+                    is_active: location.isActive
+                }])
+                .select()
+                .single();
+
+            if (error) {
+                console.error('Error creating location:', error);
+                return null;
+            }
+            return {
+                id: data.id,
+                name: data.name,
+                type: data.type,
+                address: data.address,
+                isActive: data.is_active,
+                createdAt: data.created_at
+            };
+        },
+
+        async update(id: string, updates: Partial<Location>): Promise<boolean> {
+            const { error } = await supabase
+                .from('locations')
+                .update({
+                    name: updates.name,
+                    type: updates.type,
+                    address: updates.address,
+                    is_active: updates.isActive
+                })
+                .eq('id', id);
+
+            if (error) {
+                console.error('Error updating location:', error);
+                return false;
+            }
+            return true;
+        },
+
+        async delete(id: string): Promise<boolean> {
+            const { error } = await supabase
+                .from('locations')
+                .update({ is_active: false })
+                .eq('id', id);
+
+            if (error) {
+                console.error('Error deactivating location:', error);
+                return false;
+            }
+            return true;
+        }
+    },
+
+    customers: {
+        async getAll(): Promise<Customer[]> {
+            const { data, error } = await supabase
+                .from('customers')
+                .select('*')
+                .eq('is_active', true)
+                .order('name');
+
+            if (error || !data) {
+                console.error('Error fetching customers:', error);
+                return [];
+            }
+            return data.map((c: any) => ({
+                id: c.id,
+                name: c.name,
+                type: c.type as CustomerType,
+                contactInfo: c.contact_phone,
+                contactEmail: c.contact_email,
+                address: c.address
+            }));
+        },
+
+        async create(customer: Omit<Customer, 'id'>): Promise<Customer | null> {
+            const { data, error } = await supabase
+                .from('customers')
+                .insert([{
+                    name: customer.name,
+                    type: customer.type,
+                    contact_phone: customer.contactInfo,
+                    address: (customer as any).address
+                }])
+                .select()
+                .single();
+
+            if (error) {
+                console.error('Error creating customer:', error);
+                return null;
+            }
+            return {
+                id: data.id,
+                name: data.name,
+                type: data.type as CustomerType,
+                contactInfo: data.contact_phone
+            };
+        },
+
+        async update(id: string, updates: Partial<Customer>): Promise<boolean> {
+            const { error } = await supabase
+                .from('customers')
+                .update({
+                    name: updates.name,
+                    type: updates.type,
+                    contact_phone: updates.contactInfo
+                })
+                .eq('id', id);
+
+            if (error) {
+                console.error('Error updating customer:', error);
+                return false;
+            }
+            return true;
+        },
+
+        async delete(id: string): Promise<boolean> {
+            const { error } = await supabase
+                .from('customers')
+                .update({ is_active: false })
+                .eq('id', id);
+
+            if (error) {
+                console.error('Error deactivating customer:', error);
+                return false;
+            }
+            return true;
+        }
     }
 };
+

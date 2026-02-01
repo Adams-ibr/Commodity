@@ -1,34 +1,49 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { InventoryItem, ProductType, CustomerType, Customer, TransactionType } from '../types';
-import { ShoppingCart, Users, Truck, Check } from 'lucide-react';
+import { ShoppingCart, Users, Truck, Check, Plus, X, Phone, Search } from 'lucide-react';
+import { api } from '../services/api';
 
 interface SalesModuleProps {
     inventory: InventoryItem[];
     onCommitTransaction: (data: any) => void;
 }
 
-// Mock customers for demo
-const MOCK_CUSTOMERS: Customer[] = [
-    { id: 'CUST-001', name: 'Total Energies Dealer', type: CustomerType.DEALER, contactInfo: '080-DEALER-1' },
-    { id: 'CUST-002', name: 'ABC Logistics', type: CustomerType.END_USER, contactInfo: '080-USER-2' },
-    { id: 'CUST-003', name: 'Mobil Dealer', type: CustomerType.DEALER, contactInfo: '080-DEALER-3' },
-    { id: 'CUST-004', name: 'Dangote Transport', type: CustomerType.END_USER, contactInfo: '080-USER-4' }
-];
-
 export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTransaction }) => {
+    const [customers, setCustomers] = useState<Customer[]>([]);
+    const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
     const [customerType, setCustomerType] = useState<CustomerType>(CustomerType.DEALER);
     const [selectedCustomer, setSelectedCustomer] = useState<string>('');
     const [product, setProduct] = useState<ProductType>(ProductType.PMS);
     const [sourceId, setSourceId] = useState<string>('');
     const [volume, setVolume] = useState<string>('');
     const [refDoc, setRefDoc] = useState<string>('');
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showAddCustomer, setShowAddCustomer] = useState(false);
 
-    const availableCustomers = MOCK_CUSTOMERS.filter(c => c.type === customerType);
+    // New customer form
+    const [newCustomerName, setNewCustomerName] = useState('');
+    const [newCustomerPhone, setNewCustomerPhone] = useState('');
+
+    useEffect(() => {
+        loadCustomers();
+    }, []);
+
+    const loadCustomers = async () => {
+        setIsLoadingCustomers(true);
+        const data = await api.customers.getAll();
+        setCustomers(data);
+        setIsLoadingCustomers(false);
+    };
+
+    const availableCustomers = customers
+        .filter(c => c.type === customerType)
+        .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
+
     const availableInventory = inventory.filter(i => i.product === product && i.currentVolume > 0);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        const cust = MOCK_CUSTOMERS.find(c => c.id === selectedCustomer);
+        const cust = customers.find(c => c.id === selectedCustomer);
 
         onCommitTransaction({
             type: TransactionType.SALE,
@@ -46,6 +61,27 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
         setRefDoc('');
         setSelectedCustomer('');
     };
+
+    const handleAddCustomer = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!newCustomerName.trim()) return;
+
+        const newCustomer = await api.customers.create({
+            name: newCustomerName.trim(),
+            type: customerType,
+            contactInfo: newCustomerPhone.trim() || undefined
+        });
+
+        if (newCustomer) {
+            setCustomers([...customers, newCustomer]);
+            setSelectedCustomer(newCustomer.id);
+            setShowAddCustomer(false);
+            setNewCustomerName('');
+            setNewCustomerPhone('');
+        }
+    };
+
+    const selectedCustomerDetails = customers.find(c => c.id === selectedCustomer);
 
     return (
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -66,7 +102,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
                     <div className="grid grid-cols-2 gap-4">
                         <button
                             type="button"
-                            onClick={() => { setCustomerType(CustomerType.DEALER); setSelectedCustomer(''); }}
+                            onClick={() => { setCustomerType(CustomerType.DEALER); setSelectedCustomer(''); setSearchQuery(''); }}
                             className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all ${customerType === CustomerType.DEALER
                                 ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
                                 : 'border-slate-200 hover:border-indigo-300'
@@ -77,7 +113,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
                         </button>
                         <button
                             type="button"
-                            onClick={() => { setCustomerType(CustomerType.END_USER); setSelectedCustomer(''); }}
+                            onClick={() => { setCustomerType(CustomerType.END_USER); setSelectedCustomer(''); setSearchQuery(''); }}
                             className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all ${customerType === CustomerType.END_USER
                                 ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
                                 : 'border-slate-200 hover:border-indigo-300'
@@ -88,8 +124,32 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
                         </button>
                     </div>
 
+                    {/* Customer Selection with Search */}
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Select Customer</label>
+                        <div className="flex items-center justify-between mb-1">
+                            <label className="block text-sm font-medium text-slate-700">Select Customer</label>
+                            <button
+                                type="button"
+                                onClick={() => setShowAddCustomer(true)}
+                                className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
+                            >
+                                <Plus className="w-3 h-3" />
+                                Add New
+                            </button>
+                        </div>
+
+                        {/* Search Input */}
+                        <div className="relative mb-2">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                placeholder={`Search ${customerType}s...`}
+                                className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 text-sm"
+                            />
+                        </div>
+
                         <select
                             value={selectedCustomer}
                             onChange={(e) => setSelectedCustomer(e.target.value)}
@@ -97,10 +157,26 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
                             className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500"
                         >
                             <option value="">-- Select {customerType} --</option>
-                            {availableCustomers.map(c => (
-                                <option key={c.id} value={c.id}>{c.name}</option>
-                            ))}
+                            {isLoadingCustomers ? (
+                                <option disabled>Loading...</option>
+                            ) : availableCustomers.length === 0 ? (
+                                <option disabled>No {customerType}s found</option>
+                            ) : (
+                                availableCustomers.map(c => (
+                                    <option key={c.id} value={c.id}>{c.name}</option>
+                                ))
+                            )}
                         </select>
+
+                        {/* Selected Customer Details */}
+                        {selectedCustomerDetails && (
+                            <div className="mt-2 p-2 bg-slate-50 rounded border border-slate-200 text-sm">
+                                <div className="flex items-center gap-2 text-slate-600">
+                                    <Phone className="w-4 h-4" />
+                                    <span>{selectedCustomerDetails.contactInfo || 'No phone'}</span>
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
@@ -170,6 +246,70 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
                 </form>
             </div>
 
+            {/* Add Customer Modal */}
+            {showAddCustomer && (
+                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl p-6 w-full max-w-md shadow-2xl">
+                        <div className="flex items-center justify-between mb-6">
+                            <h3 className="text-xl font-bold text-slate-800">
+                                Add New {customerType}
+                            </h3>
+                            <button
+                                onClick={() => setShowAddCustomer(false)}
+                                className="p-2 hover:bg-slate-100 rounded-lg"
+                            >
+                                <X className="w-5 h-5 text-slate-500" />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleAddCustomer} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    Customer Name *
+                                </label>
+                                <input
+                                    type="text"
+                                    required
+                                    value={newCustomerName}
+                                    onChange={(e) => setNewCustomerName(e.target.value)}
+                                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="Enter customer name"
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">
+                                    Phone Number
+                                </label>
+                                <input
+                                    type="tel"
+                                    value={newCustomerPhone}
+                                    onChange={(e) => setNewCustomerPhone(e.target.value)}
+                                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="080-XXX-XXXX"
+                                />
+                            </div>
+
+                            <div className="flex gap-3 pt-4">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowAddCustomer(false)}
+                                    className="flex-1 px-4 py-2 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex-1 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
+                                >
+                                    Add Customer
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
+
             {/* Summary / Info Panel */}
             <div className="space-y-6">
                 <div className="bg-indigo-900 text-white p-6 rounded-lg shadow-sm">
@@ -191,15 +331,19 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
                 </div>
 
                 <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-                    <h3 className="font-bold text-slate-700 mb-3">Today's Quick Stats</h3>
+                    <h3 className="font-bold text-slate-700 mb-3">Customer Summary</h3>
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="p-3 bg-green-50 rounded border border-green-100">
-                            <div className="text-xs text-green-600 font-medium uppercase">Total Sales</div>
-                            <div className="text-2xl font-bold text-green-700">12</div>
+                        <div className="p-3 bg-amber-50 rounded border border-amber-100">
+                            <div className="text-xs text-amber-600 font-medium uppercase">Dealers</div>
+                            <div className="text-2xl font-bold text-amber-700">
+                                {customers.filter(c => c.type === CustomerType.DEALER).length}
+                            </div>
                         </div>
                         <div className="p-3 bg-blue-50 rounded border border-blue-100">
-                            <div className="text-xs text-blue-600 font-medium uppercase">Volume Out</div>
-                            <div className="text-2xl font-bold text-blue-700">45k L</div>
+                            <div className="text-xs text-blue-600 font-medium uppercase">End Users</div>
+                            <div className="text-2xl font-bold text-blue-700">
+                                {customers.filter(c => c.type === CustomerType.END_USER).length}
+                            </div>
                         </div>
                     </div>
                 </div>
