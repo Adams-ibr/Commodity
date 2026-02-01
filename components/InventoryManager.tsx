@@ -75,14 +75,6 @@ export const InventoryManager: React.FC<InventoryManagerProps> = ({
                         </button>
                     </div>
                 </div>
-
-                <button
-                    onClick={handleAddNew}
-                    className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 flex items-center gap-2 text-sm font-medium transition-colors"
-                >
-                    <Plus className="w-4 h-4" />
-                    Add New Item
-                </button>
             </div>
 
             {viewMode === 'stats' ? (

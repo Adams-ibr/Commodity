@@ -9,7 +9,8 @@ import {
   UserCircle,
   Menu,
   X,
-  MapPin
+  MapPin,
+  Fuel
 } from 'lucide-react';
 import { InventoryManager } from './components/InventoryManager';
 import { InventoryStats } from './components/InventoryStats';
@@ -19,6 +20,7 @@ import { SalesModule } from './components/SalesModule';
 import { RestockModule } from './components/RestockModule';
 import { ComplianceDashboard } from './components/ComplianceDashboard';
 import { LocationsManager } from './components/LocationsManager';
+import { TankManager } from './components/TankManager';
 import { SignIn } from './components/SignIn';
 import { useAuth } from './context/AuthContext';
 import { COMPLIANCE_RULES } from './constants/compliance';
@@ -316,6 +318,8 @@ function App() {
         return <ComplianceDashboard rules={COMPLIANCE_RULES} />;
       case 'locations':
         return <LocationsManager />;
+      case 'tanks':
+        return <TankManager userRole={currentUser.role} />;
       default:
         return <div className="text-center p-10 text-slate-500">Module under construction</div>;
     }
@@ -376,9 +380,12 @@ function App() {
           {/* Compliance is key for Auditors/Admins */}
           <NavItem id="compliance" label="SRS Compliance" icon={FileCheck} />
 
-          {/* Locations - Admin only */}
+          {/* Locations & Tanks - Admin/Manager only */}
           {(currentUser.role === UserRole.SUPER_ADMIN || currentUser.role === UserRole.DEPOT_MANAGER) && (
-            <NavItem id="locations" label="Locations" icon={MapPin} />
+            <>
+              <NavItem id="locations" label="Locations" icon={MapPin} />
+              <NavItem id="tanks" label="Tank Management" icon={Fuel} />
+            </>
           )}
         </div>
 
