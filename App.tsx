@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import {
   LayoutDashboard,
-  Database,
-  History,
-  FileCheck,
+  Package,
+  FileText,
+  ShoppingCart,
+  Truck,
   Settings,
-  LogOut,
-  UserCircle,
-  Menu,
-  X,
+  AlertTriangle,
   MapPin,
-  Fuel
+  Fuel,
+  DollarSign,
+  LogOut,
+  Menu,
+  X
 } from 'lucide-react';
 import { InventoryManager } from './components/InventoryManager';
 import { InventoryStats } from './components/InventoryStats';
@@ -21,6 +23,7 @@ import { RestockModule } from './components/RestockModule';
 import { ComplianceDashboard } from './components/ComplianceDashboard';
 import { LocationsManager } from './components/LocationsManager';
 import { TankManager } from './components/TankManager';
+import { PricingManager } from './components/PricingManager';
 import { SignIn } from './components/SignIn';
 import { useAuth } from './context/AuthContext';
 import { COMPLIANCE_RULES } from './constants/compliance';
@@ -323,6 +326,8 @@ function App() {
         return <LocationsManager />;
       case 'tanks':
         return <TankManager userRole={currentUser.role} />;
+      case 'pricing':
+        return <PricingManager userRole={currentUser.role} />;
       default:
         return <div className="text-center p-10 text-slate-500">Module under construction</div>;
     }

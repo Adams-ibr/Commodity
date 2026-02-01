@@ -41,6 +41,20 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
 
     const availableInventory = inventory.filter(i => i.product === product);
 
+    const [currentPrice, setCurrentPrice] = useState<number>(0);
+
+    // Fetch price when product or customer type changes
+    useEffect(() => {
+        const fetchPrice = async () => {
+            const price = await api.prices.getPrice(product, customerType);
+            setCurrentPrice(price);
+        };
+        fetchPrice();
+    }, [product, customerType]);
+
+    // Calculate total
+    const totalAmount = currentPrice * (Number(volume) || 0);
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const cust = customers.find(c => c.id === selectedCustomer);
@@ -53,13 +67,16 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
             destination: cust?.name || 'External Customer',
             refDoc,
             customerId: selectedCustomer,
-            customerName: cust?.name
+            customerName: cust?.name,
+            unitPrice: currentPrice, // Capture price at time of sale
+            totalAmount: totalAmount
         });
 
         // Reset form
         setVolume('');
         setRefDoc('');
-        setSelectedCustomer('');
+        setSourceId('');
+        // Don't reset customer/product as high-frequency sales might repeat
     };
 
     const handleAddCustomer = async (e: React.FormEvent) => {
@@ -232,25 +249,35 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
                             <label className="block text-sm font-medium text-slate-700 mb-1">Volume (Liters)</label>
                             <input
                                 type="number"
-                                required
-                                min="1"
                                 value={volume}
                                 onChange={(e) => setVolume(e.target.value)}
-                                className="w-full px-3 py-2 border border-slate-300 rounded-md"
+                                required
+                                min="1"
                                 placeholder="0.00"
+                                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500"
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Reference / Invoice #</label>
-                            <input
-                                type="text"
-                                required
-                                value={refDoc}
-                                onChange={(e) => setRefDoc(e.target.value)}
-                                className="w-full px-3 py-2 border border-slate-300 rounded-md"
-                                placeholder="INV-..."
-                            />
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Total Amount (₦)</label>
+                            <div className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-md text-slate-700 font-bold">
+                                ₦{totalAmount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+                            </div>
+                            <div className="text-xs text-slate-500 mt-1 text-right">
+                                Rate: ₦{currentPrice}/L
+                            </div>
                         </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Reference / Invoice #</label>
+                        <input
+                            type="text"
+                            required
+                            value={refDoc}
+                            onChange={(e) => setRefDoc(e.target.value)}
+                            className="w-full px-3 py-2 border border-slate-300 rounded-md"
+                            placeholder="INV-..."
+                        />
                     </div>
 
                     <button
@@ -261,6 +288,45 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
                         Process Sale
                     </button>
                 </form>
+            </div>
+
+            {/* Summary / Info Panel */}
+            <div className="space-y-6">
+                <div className="bg-indigo-900 text-white p-6 rounded-lg shadow-sm">
+                    <h3 className="text-lg font-bold mb-4">Sales Policy Guidelines</h3>
+                    <ul className="space-y-3 text-indigo-100 text-sm">
+                        <li className="flex gap-2">
+                            <span className="text-indigo-400">•</span>
+                            Dealers must have a valid lifting license for the current year.
+                        </li>
+                        <li className="flex gap-2">
+                            <span className="text-indigo-400">•</span>
+                            End Users require signed strict liability agreements for volume &gt; 10,000L.
+                        </li>
+                        <li className="flex gap-2">
+                            <span className="text-indigo-400">•</span>
+                            All PMS sales are subject to current DPR price caps.
+                        </li>
+                    </ul>
+                </div>
+
+                <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
+                    <h3 className="font-bold text-slate-700 mb-3">Customer Summary</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="p-3 bg-amber-50 rounded border border-amber-100">
+                            <div className="text-xs text-amber-600 font-medium uppercase">Dealers</div>
+                            <div className="text-2xl font-bold text-amber-700">
+                                {customers.filter(c => c.type === CustomerType.DEALER).length}
+                            </div>
+                        </div>
+                        <div className="p-3 bg-blue-50 rounded border border-blue-100">
+                            <div className="text-xs text-blue-600 font-medium uppercase">End Users</div>
+                            <div className="text-2xl font-bold text-blue-700">
+                                {customers.filter(c => c.type === CustomerType.END_USER).length}
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             {/* Add Customer Modal */}
@@ -326,45 +392,6 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
                     </div>
                 </div>
             )}
-
-            {/* Summary / Info Panel */}
-            <div className="space-y-6">
-                <div className="bg-indigo-900 text-white p-6 rounded-lg shadow-sm">
-                    <h3 className="text-lg font-bold mb-4">Sales Policy Guidelines</h3>
-                    <ul className="space-y-3 text-indigo-100 text-sm">
-                        <li className="flex gap-2">
-                            <span className="text-indigo-400">•</span>
-                            Dealers must have a valid lifting license for the current year.
-                        </li>
-                        <li className="flex gap-2">
-                            <span className="text-indigo-400">•</span>
-                            End Users require signed strict liability agreements for volume &gt; 10,000L.
-                        </li>
-                        <li className="flex gap-2">
-                            <span className="text-indigo-400">•</span>
-                            All PMS sales are subject to current DPR price caps.
-                        </li>
-                    </ul>
-                </div>
-
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-                    <h3 className="font-bold text-slate-700 mb-3">Customer Summary</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="p-3 bg-amber-50 rounded border border-amber-100">
-                            <div className="text-xs text-amber-600 font-medium uppercase">Dealers</div>
-                            <div className="text-2xl font-bold text-amber-700">
-                                {customers.filter(c => c.type === CustomerType.DEALER).length}
-                            </div>
-                        </div>
-                        <div className="p-3 bg-blue-50 rounded border border-blue-100">
-                            <div className="text-xs text-blue-600 font-medium uppercase">End Users</div>
-                            <div className="text-2xl font-bold text-blue-700">
-                                {customers.filter(c => c.type === CustomerType.END_USER).length}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 };

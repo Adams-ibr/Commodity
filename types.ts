@@ -82,3 +82,12 @@ export interface ComplianceRule {
   status: 'Compliant' | 'Pending' | 'Flagged';
   lastChecked: string;
 }
+
+export interface Price {
+  id: string;
+  product: ProductType;
+  customerType: CustomerType;
+  pricePerLiter: number;
+  lastUpdated: string;
+  updatedBy: string;
+}

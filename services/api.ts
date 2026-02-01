@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { InventoryItem, Transaction, AuditLogEntry, ProductType, TransactionType, UserRole, Customer, CustomerType } from '../types';
+import { InventoryItem, Transaction, AuditLogEntry, ProductType, TransactionType, UserRole, Customer, CustomerType, Price } from '../types';
 
 // Location type for API
 export interface Location {
@@ -320,6 +320,56 @@ export const api = {
             }
             return true;
         }
+    },
+
+    prices: {
+        async getAll(): Promise<Price[]> {
+            const { data, error } = await supabase
+                .from('prices')
+                .select('*')
+                .order('product');
+
+            if (error || !data) {
+                console.error('Error fetching prices:', error);
+                return [];
+            }
+            return data.map((p: any) => ({
+                id: p.id,
+                product: p.product as ProductType,
+                customerType: p.customer_type as CustomerType,
+                pricePerLiter: Number(p.price_per_liter),
+                lastUpdated: p.updated_at,
+                updatedBy: p.updated_by
+            }));
+        },
+
+        async update(id: string, price: number, user: string): Promise<boolean> {
+            const { error } = await supabase
+                .from('prices')
+                .update({
+                    price_per_liter: price,
+                    updated_by: user,
+                    updated_at: new Date().toISOString()
+                })
+                .eq('id', id);
+
+            if (error) {
+                console.error('Error updating price:', error);
+                return false;
+            }
+            return true;
+        },
+
+        async getPrice(product: ProductType, customerType: CustomerType): Promise<number> {
+            const { data, error } = await supabase
+                .from('prices')
+                .select('price_per_liter')
+                .eq('product', product)
+                .eq('customer_type', customerType)
+                .single();
+
+            if (error || !data) return 0;
+            return Number(data.price_per_liter);
+        }
     }
 };
-
