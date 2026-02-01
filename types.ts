@@ -46,7 +46,26 @@ export interface Customer {
   id: string;
   name: string;
   type: CustomerType;
-  contactInfo?: string;
+  contactInfo?: {
+    phone?: string;
+    email?: string;
+    address?: string;
+  };
+  status: 'Active' | 'Inactive';
+  createdDate: string;
+  lastTransactionDate?: string;
+  totalPurchases: number;
+  averageTransactionSize: number;
+  notes?: string;
+}
+
+export interface CustomerStats {
+  totalCustomers: number;
+  activeCustomers: number;
+  dealerCount: number;
+  endUserCount: number;
+  topCustomers: Customer[];
+  recentTransactions: Transaction[];
 }
 
 export interface Transaction {

@@ -16,7 +16,8 @@ import {
   Layers,
   UserCircle,
   FileCheck,
-  History
+  History,
+  Users
 } from 'lucide-react';
 import { InventoryManager } from './components/InventoryManager';
 import { InventoryStats } from './components/InventoryStats';
@@ -28,6 +29,7 @@ import { ComplianceDashboard } from './components/ComplianceDashboard';
 import { LocationsManager } from './components/LocationsManager';
 import { TankManager } from './components/TankManager';
 import { PricingManager } from './components/PricingManager';
+import { CustomerManager } from './components/CustomerManager';
 import { SignIn } from './components/SignIn';
 import { useAuth } from './context/AuthContext';
 import { COMPLIANCE_RULES } from './constants/compliance';
@@ -322,6 +324,8 @@ function App() {
         return <AuditView logs={visibleLogs} />;
       case 'sales':
         return <SalesModule inventory={visibleInventory} onCommitTransaction={handleTransactionCommit} />;
+      case 'customers':
+        return <CustomerManager userRole={currentUser.role} transactions={visibleTransactions} />;
       case 'restock':
         return <RestockModule inventory={visibleInventory} onCommitTransaction={handleTransactionCommit} />;
       case 'compliance':
@@ -387,6 +391,7 @@ function App() {
           <NavItem id="audit" label="Audit Trail" icon={History} />
 
           <NavItem id="sales" label="Sales & Dealers" icon={UserCircle} />
+          <NavItem id="customers" label="Customer Management" icon={Users} />
           <NavItem id="restock" label="Add Inventory" icon={Layers} />
 
           {/* Compliance is key for Auditors/Admins */}
