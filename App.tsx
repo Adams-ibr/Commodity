@@ -20,12 +20,7 @@ import { ComplianceDashboard } from './components/ComplianceDashboard';
 import { SignIn } from './components/SignIn';
 import { SignUp } from './components/SignUp';
 import { useAuth } from './context/AuthContext';
-import {
-  mockInventory,
-  mockTransactions,
-  mockAuditLogs,
-  mockCompliance
-} from './services/mockData';
+import { COMPLIANCE_RULES } from './constants/compliance';
 import { InventoryItem, Transaction, AuditLogEntry, UserRole, TransactionType, User } from './types';
 
 import { api } from './services/api';
@@ -289,7 +284,7 @@ function App() {
             inventory={visibleInventory}
             auditLogs={visibleLogs}
             transactions={visibleTransactions}
-            complianceRules={mockCompliance}
+            complianceRules={COMPLIANCE_RULES}
             onCommitTransaction={handleTransactionCommit}
             onApproveTransaction={handleTransactionApprove}
           />
@@ -315,7 +310,7 @@ function App() {
       case 'restock':
         return <RestockModule inventory={visibleInventory} onCommitTransaction={handleTransactionCommit} />;
       case 'compliance':
-        return <ComplianceDashboard rules={mockCompliance} />;
+        return <ComplianceDashboard rules={COMPLIANCE_RULES} />;
       default:
         return <div className="text-center p-10 text-slate-500">Module under construction</div>;
     }
