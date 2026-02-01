@@ -12,7 +12,11 @@ import {
   DollarSign,
   LogOut,
   Menu,
-  X
+  X,
+  Layers,
+  UserCircle,
+  FileCheck,
+  History
 } from 'lucide-react';
 import { InventoryManager } from './components/InventoryManager';
 import { InventoryStats } from './components/InventoryStats';
@@ -364,7 +368,7 @@ function App() {
         <div className="flex items-center justify-between p-6 border-b border-indigo-800">
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center">
-              <Database className="w-5 h-5 text-white" />
+              <Layers className="w-5 h-5 text-white" />
             </div>
             <span className="text-xl font-bold tracking-tight">Galaltix Energy</span>
           </div>
@@ -377,13 +381,13 @@ function App() {
           <NavItem id="dashboard" label="Dashboard" icon={LayoutDashboard} />
 
           {/* Inventory is relevant for everyone */}
-          <NavItem id="inventory" label="Inventory Ledger" icon={Database} />
+          <NavItem id="inventory" label="Inventory Ledger" icon={Layers} />
 
           {/* Audit Trail is vital for Auditors and Admins, but Managers can see their history */}
           <NavItem id="audit" label="Audit Trail" icon={History} />
 
           <NavItem id="sales" label="Sales & Dealers" icon={UserCircle} />
-          <NavItem id="restock" label="Add Inventory" icon={Database} />
+          <NavItem id="restock" label="Add Inventory" icon={Layers} />
 
           {/* Compliance is key for Auditors/Admins */}
           <NavItem id="compliance" label="SRS Compliance" icon={FileCheck} />

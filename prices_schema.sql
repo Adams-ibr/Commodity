@@ -21,10 +21,10 @@ create policy "Prices manageble by admins and managers"
   on public.prices for all 
   using (
     auth.jwt() ->> 'role' = 'service_role' or 
-    (auth.user_id() is not null and 
+    (auth.uid() is not null and 
      exists (
        select 1 from public.users 
-       where id = auth.user_id() 
+       where id = auth.uid() 
        and role in ('Super Admin', 'Depot Manager')
      ))
   );
