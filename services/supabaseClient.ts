@@ -1,15 +1,24 @@
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 const supabaseUrl = (import.meta as any).env.VITE_SUPABASE_URL;
 const supabaseAnonKey = (import.meta as any).env.VITE_SUPABASE_ANON_KEY;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-    console.warn('Supabase URL or Key missing. Database features will fail.');
+// Create a fail-safe Supabase client
+let supabase: SupabaseClient;
+
+try {
+    if (supabaseUrl && supabaseAnonKey) {
+        supabase = createClient(supabaseUrl, supabaseAnonKey);
+        console.log('Supabase client initialized successfully');
+    } else {
+        console.warn('Supabase credentials missing - using mock client');
+        // Create a minimal mock client that won't crash
+        supabase = createClient('https://placeholder.supabase.co', 'placeholder-key');
+    }
+} catch (error) {
+    console.error('Failed to create Supabase client:', error);
+    // Create a minimal mock client as fallback
+    supabase = createClient('https://placeholder.supabase.co', 'placeholder-key');
 }
 
-// Use safe placeholders to prevent top-level crash if env vars are missing
-// The app will load but API calls will fail (which is handled gracefully by the UI)
-const safeUrl = supabaseUrl || 'https://placeholder.supabase.co';
-const safeKey = supabaseAnonKey || 'placeholder-key';
-
-export const supabase = createClient(safeUrl, safeKey);
+export { supabase };

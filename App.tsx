@@ -41,14 +41,18 @@ function App() {
   useEffect(() => {
     const loadData = async () => {
       setIsLoading(true);
-      const [invData, txData, logData] = await Promise.all([
-        api.inventory.getAll(),
-        api.transactions.getAll(),
-        api.audit.getAll()
-      ]);
-      setInventory(invData);
-      setTransactions(txData);
-      setAuditLogs(logData);
+      try {
+        const [invData, txData, logData] = await Promise.all([
+          api.inventory.getAll(),
+          api.transactions.getAll(),
+          api.audit.getAll()
+        ]);
+        setInventory(invData);
+        setTransactions(txData);
+        setAuditLogs(logData);
+      } catch (error) {
+        console.error('Failed to load data:', error);
+      }
       setIsLoading(false);
     };
     loadData();
