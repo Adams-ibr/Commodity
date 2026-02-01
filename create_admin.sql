@@ -1,31 +1,27 @@
--- Create Super Admin User for Galaltix Energy
--- Run this in Supabase SQL Editor AFTER creating the user in Authentication
+-- =============================================
+-- SET USER AS SUPER ADMIN
+-- Run this AFTER creating the user in Dashboard
+-- =============================================
 
--- STEP 1: First, create the user via Supabase Auth Dashboard:
--- Go to: Authentication > Users > Add User
--- Email: admin@galaltixenergy.com
--- Password: [Set a strong password]
+-- This updates the user profile to Super Admin
+UPDATE public.users
+SET 
+  role = 'Super Admin',
+  name = 'System Administrator',
+  location = 'HQ - Abuja'
+WHERE email = 'admin@galaltixenergy.com';
 
--- STEP 2: Then run this SQL to set the role and location:
--- Replace 'YOUR_USER_ID_HERE' with the actual UUID from the Auth dashboard
-
--- UPDATE public.users
--- SET 
---   role = 'Super Admin',
---   location = 'HQ - Abuja',
---   name = 'System Administrator'
--- WHERE email = 'admin@galaltixenergy.com';
-
--- Alternative: Insert directly if trigger didn't create the user
+-- If the above returns 0 rows (trigger didn't create profile), run this:
 -- INSERT INTO public.users (id, email, name, role, location)
--- VALUES (
---   'YOUR_USER_ID_HERE',  -- Copy from Auth > Users
---   'admin@galaltixenergy.com',
+-- SELECT 
+--   id,
+--   email,
 --   'System Administrator',
 --   'Super Admin',
 --   'HQ - Abuja'
--- )
+-- FROM auth.users
+-- WHERE email = 'admin@galaltixenergy.com'
 -- ON CONFLICT (id) DO UPDATE SET
 --   role = 'Super Admin',
---   location = 'HQ - Abuja',
---   name = 'System Administrator';
+--   name = 'System Administrator',
+--   location = 'HQ - Abuja';
