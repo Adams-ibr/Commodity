@@ -77,12 +77,34 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
         ? currentPrice * (Number(volume) || 0)
         : Number(amount) || 0;
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         const cust = customers.find(c => c.id === selectedCustomer);
 
-        // Get the actual invoice number (this increments the counter)
-        const invoiceNumber = getNextInvoiceNumber();
+        // Get the actual invoice number from database to prevent duplicates
+        let invoiceNumber: string;
+        try {
+            const todayStr = getTodayDateString();
+            const lastRef = await api.transactions.getLastInvoiceNumber(todayStr);
+            let nextCount = 1;
+
+            if (lastRef) {
+                // Format: INV-YYYYMMDD-NNNN
+                const parts = lastRef.split('-');
+                if (parts.length === 3) {
+                    const seq = parseInt(parts[2], 10);
+                    if (!isNaN(seq)) nextCount = seq + 1;
+                }
+            }
+
+            invoiceNumber = `INV-${todayStr}-${String(nextCount).padStart(4, '0')}`;
+            // Sync local counter for next preview
+            syncInvoiceCounter(invoiceNumber);
+
+        } catch (err) {
+            console.error('Error generating invoice number, falling back to local', err);
+            invoiceNumber = getNextInvoiceNumber();
+        }
 
         onCommitTransaction({
             type: TransactionType.SALE,
@@ -100,6 +122,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
         // Reset form and get next invoice number preview
         setVolume('');
         setAmount('');
+        // Update RefDoc preview based on the one we just generated
+        // (syncInvoiceCounter already updated local storage, so previewNext works)
         setRefDoc(previewNextInvoiceNumber());
         setSourceId('');
         // Don't reset customer/product as high-frequency sales might repeat

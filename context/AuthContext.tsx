@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { authService, AuthUser } from '../services/authService';
+import { supabase } from '../services/supabaseClient';
 import { UserRole } from '../types';
 
 interface AuthContextType {
@@ -32,8 +33,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Check for existing session on mount
         const initAuth = async () => {
             try {
-                const currentUser = await authService.getCurrentUser();
-                setUser(currentUser);
+                // Check local session first (faster and more reliable for persistence)
+                const { data: { session } } = await supabase.auth.getSession();
+
+                if (session?.user) {
+                    // Update state with session user immediately to prevent flash of login
+                    // Then verify/fetch full profile
+                    const currentUser = await authService.getCurrentUser();
+                    setUser(currentUser);
+                } else {
+                    // Double check with getUser just in case
+                    const currentUser = await authService.getCurrentUser();
+                    setUser(currentUser);
+                }
             } catch (error) {
                 console.error('Auth initialization error:', error);
             } finally {
