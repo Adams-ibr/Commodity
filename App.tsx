@@ -444,11 +444,9 @@ function App() {
         ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}
       `}>
         <div className="flex items-center justify-between p-6 border-b border-indigo-800">
-          <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-indigo-500 rounded-lg flex items-center justify-center">
-              <Layers className="w-5 h-5 text-white" />
-            </div>
-            <span className="text-xl font-bold tracking-tight">Galaltix Energy</span>
+          <div className="flex items-center space-x-3">
+            <img src="/logo.png" alt="Galaltix Energy" className="h-10 w-auto" />
+            <span className="text-lg font-bold tracking-tight">Galaltix Energy</span>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-indigo-300">
             <X className="w-6 h-6" />

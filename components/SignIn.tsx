@@ -36,9 +36,7 @@ export const SignIn: React.FC<SignInProps> = ({ onSignIn }) => {
         {/* Header */}
         <div className="text-center mb-10">
           <div className="flex justify-center mb-6">
-            <div className="w-20 h-20 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-2xl shadow-indigo-500/30">
-              <Shield className="w-10 h-10 text-white" />
-            </div>
+            <img src="/logo.png" alt="Galaltix Energy" className="h-24 w-auto drop-shadow-2xl" />
           </div>
           <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Galaltix Energy</h1>
           <p className="text-indigo-200/80">
