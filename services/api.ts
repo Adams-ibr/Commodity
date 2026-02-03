@@ -19,10 +19,11 @@ export const api = {
                 .from('inventory_items')
                 .select('*');
 
-            if (error || !data) {
+            if (error) {
                 console.error('Error fetching inventory:', error);
-                return [];
+                throw error;
             }
+            if (!data) return [];
             return data.map((item: any) => ({
                 id: item.id,
                 location: item.location,

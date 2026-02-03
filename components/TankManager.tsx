@@ -14,15 +14,24 @@ export const TankManager: React.FC<TankManagerProps> = ({ userRole }) => {
     const [isEditing, setIsEditing] = useState(false);
     const [currentTank, setCurrentTank] = useState<InventoryItem | null>(null);
 
+    const [error, setError] = useState<string | null>(null);
+
     useEffect(() => {
         loadTanks();
     }, []);
 
     const loadTanks = async () => {
         setIsLoading(true);
-        const data = await api.inventory.getAll();
-        setTanks(data);
-        setIsLoading(false);
+        setError(null);
+        try {
+            const data = await api.inventory.getAll();
+            setTanks(data);
+        } catch (err: any) {
+            console.error('Failed to load tanks:', err);
+            setError(err.message || 'Failed to load tank configuration');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
     const handleSave = async (item: InventoryItem) => {
@@ -93,6 +102,13 @@ export const TankManager: React.FC<TankManagerProps> = ({ userRole }) => {
                     </button>
                 )}
             </div>
+
+            {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 flex-shrink-0" />
+                    <p>{error} - Please contact your administrator to check database permissions (RLS).</p>
+                </div>
+            )}
 
             {isLoading ? (
                 <div className="flex items-center justify-center py-20">
