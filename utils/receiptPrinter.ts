@@ -137,6 +137,7 @@ export const printReceipt = (data: ReceiptData) => {
     </head>
     <body>
       <div class="header">
+        <img src="/favicon.png" alt="Logo" style="width: 50px; height: auto; margin: 0 auto 8px auto; display: block;" />
         <div class="company-name">${companyName}</div>
         <div class="location">${location}</div>
       </div>
