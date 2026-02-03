@@ -14,11 +14,44 @@ export enum TransactionType {
 
 export enum UserRole {
   SUPER_ADMIN = 'Super Admin',
-  DEPOT_MANAGER = 'Depot Manager',
-  STATION_MANAGER = 'Station Manager',
-  INVENTORY_OFFICER = 'Inventory Officer', // Added per SRS 2.3
-  AUDITOR = 'Auditor'
+  ADMIN = 'Admin',
+  MANAGER = 'Manager',
+  ACCOUNTANT = 'Accountant',
+  CASHIER = 'Cashier'
 }
+
+export type Permission =
+  | 'manage_users'
+  | 'view_all_sales'
+  | 'process_sales'
+  | 'manage_inventory'
+  | 'view_reports'
+  | 'approve_transactions';
+
+export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
+  [UserRole.SUPER_ADMIN]: ['manage_users', 'view_all_sales', 'process_sales', 'manage_inventory', 'view_reports', 'approve_transactions'],
+  [UserRole.ADMIN]: ['manage_users', 'view_all_sales', 'process_sales', 'manage_inventory', 'view_reports', 'approve_transactions'],
+  [UserRole.MANAGER]: ['view_all_sales', 'process_sales', 'manage_inventory', 'view_reports', 'approve_transactions'],
+  [UserRole.ACCOUNTANT]: ['view_all_sales', 'view_reports'],
+  [UserRole.CASHIER]: ['process_sales']
+};
+
+// Helper function to check if a role has a specific permission
+export const hasPermission = (role: UserRole, permission: Permission): boolean => {
+  return ROLE_PERMISSIONS[role]?.includes(permission) ?? false;
+};
+
+// Helper function to check if user can manage another role
+export const canManageRole = (managerRole: UserRole, targetRole: UserRole): boolean => {
+  const roleHierarchy: Record<UserRole, number> = {
+    [UserRole.SUPER_ADMIN]: 1,
+    [UserRole.ADMIN]: 2,
+    [UserRole.MANAGER]: 3,
+    [UserRole.ACCOUNTANT]: 4,
+    [UserRole.CASHIER]: 5
+  };
+  return roleHierarchy[managerRole] < roleHierarchy[targetRole];
+};
 
 export interface User {
   name: string;

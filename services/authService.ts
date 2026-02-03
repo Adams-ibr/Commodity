@@ -94,7 +94,7 @@ export const authService = {
                     id: authData.user.id,
                     email: authData.user.email || data.email,
                     name: meta?.name || 'Unknown User',
-                    role: meta?.role as UserRole || UserRole.INVENTORY_OFFICER,
+                    role: meta?.role as UserRole || UserRole.CASHIER,
                     location: meta?.location || 'HQ - Abuja'
                 },
                 error: null
@@ -152,7 +152,7 @@ export const authService = {
             id: user.id,
             email: user.email || '',
             name: meta?.name || 'Unknown User',
-            role: meta?.role as UserRole || UserRole.INVENTORY_OFFICER,
+            role: meta?.role as UserRole || UserRole.CASHIER,
             location: meta?.location || 'HQ - Abuja'
         };
     },

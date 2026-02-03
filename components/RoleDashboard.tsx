@@ -166,21 +166,21 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
 
   // --- Role Specific Layouts ---
 
-  // 1. AUDITOR VIEW: Read-only, focus on Compliance & Logs
-  if (user.role === UserRole.AUDITOR) {
+  // 1. ACCOUNTANT VIEW: Read-only, focus on financials & Reports (replaces Auditor)
+  if (user.role === UserRole.ACCOUNTANT) {
     return (
       <div className="space-y-6">
         <div className="bg-indigo-900 text-white p-6 rounded-lg mb-6 shadow-md">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-2xl font-bold mb-1">Auditor Dashboard</h2>
+              <h2 className="text-2xl font-bold mb-1">Accountant Dashboard</h2>
               <p className="text-indigo-200 text-sm">
-                Regulatory Oversight View. Read-only access enabled.
+                Financial Overview. Read-only access to sales and reports.
               </p>
             </div>
             <div className="hidden md:block bg-indigo-800 px-4 py-2 rounded border border-indigo-700">
-              <span className="text-xs font-mono text-indigo-300">SESSION ID</span>
-              <div className="font-mono font-bold text-white">AUD-SEC-8892</div>
+              <span className="text-xs font-mono text-indigo-300">VIEW MODE</span>
+              <div className="font-mono font-bold text-white">READ-ONLY</div>
             </div>
           </div>
         </div>
@@ -189,7 +189,7 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="space-y-6">
-            <h3 className="text-lg font-bold text-slate-700">Live Inventory Monitoring</h3>
+            <h3 className="text-lg font-bold text-slate-700">Sales Overview</h3>
             <InventoryStats items={inventory} />
           </div>
           <div className="space-y-6">
@@ -235,34 +235,61 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
     );
   }
 
-  // 3. OPERATIONAL ROLES (Depot Manager, Station Manager, Inventory Officer)
-  const isManager = user.role === UserRole.DEPOT_MANAGER || user.role === UserRole.STATION_MANAGER;
+  // 3. ADMIN & MANAGER VIEW: Full access with approval queue
+  if (user.role === UserRole.ADMIN || user.role === UserRole.MANAGER) {
+    return (
+      <div className="space-y-6">
+        <div className="mb-4 flex justify-between items-end">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-800">
+              {user.role === UserRole.ADMIN ? 'Admin Dashboard' : 'Manager Dashboard'}
+            </h2>
+            <p className="text-slate-500">
+              Location: <span className="font-semibold text-indigo-700">{user.location}</span>
+            </p>
+          </div>
+        </div>
 
+        <QuickStatsWidget />
+        <ApprovalQueue />
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <InventoryStats items={inventory} />
+            <div className="mt-6">
+              <RecentActivityList />
+            </div>
+          </div>
+          <div className="lg:col-span-1">
+            <TransactionForm
+              inventory={inventory}
+              userRole={user.role}
+              onCommit={onCommitTransaction}
+            />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 4. CASHIER VIEW: Limited to sales operations, own transactions only
   return (
     <div className="space-y-6">
       <div className="mb-4 flex justify-between items-end">
         <div>
-          <h2 className="text-2xl font-bold text-slate-800">
-            {user.role === UserRole.INVENTORY_OFFICER ? 'Inventory Operations' : 'Location Management'}
-          </h2>
+          <h2 className="text-2xl font-bold text-slate-800">Cashier Dashboard</h2>
           <p className="text-slate-500">
             Location: <span className="font-semibold text-indigo-700">{user.location}</span>
           </p>
         </div>
-        {user.role === UserRole.INVENTORY_OFFICER && (
-          <div className="bg-amber-50 text-amber-800 px-4 py-2 rounded-lg border border-amber-200 text-sm">
-            Draft Mode: Transactions require approval
-          </div>
-        )}
+        <div className="bg-amber-50 text-amber-800 px-4 py-2 rounded-lg border border-amber-200 text-sm">
+          Your Sales Only: Transactions require approval
+        </div>
       </div>
 
       <QuickStatsWidget />
 
-      {/* Managers see the Approval Queue */}
-      {isManager && <ApprovalQueue />}
-
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left Col: Inventory Visualization */}
         <div className="lg:col-span-2">
           <InventoryStats items={inventory} />
           <div className="mt-6">
@@ -270,7 +297,6 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
           </div>
         </div>
 
-        {/* Right Col: Action Center */}
         <div className="lg:col-span-1">
           <TransactionForm
             inventory={inventory}
@@ -278,11 +304,9 @@ export const RoleDashboard: React.FC<RoleDashboardProps> = ({
             onCommit={onCommitTransaction}
           />
 
-          {user.role === UserRole.INVENTORY_OFFICER && (
-            <div className="mt-4 bg-slate-50 p-4 rounded-lg border border-slate-200 text-xs text-slate-500">
-              <strong>Process Note:</strong> Ensure physical dip-stick reading matches digital entry before submitting.
-            </div>
-          )}
+          <div className="mt-4 bg-slate-50 p-4 rounded-lg border border-slate-200 text-xs text-slate-500">
+            <strong>Process Note:</strong> Ensure physical dip-stick reading matches digital entry before submitting.
+          </div>
         </div>
       </div>
     </div>

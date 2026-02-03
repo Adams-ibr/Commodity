@@ -83,7 +83,7 @@ export const TankManager: React.FC<TankManagerProps> = ({ userRole }) => {
                     <p className="text-slate-500 mt-1">Configure storage tanks, capacities, and product assignments.</p>
                 </div>
                 {/* Only Admin/Manager can add tanks */}
-                {(userRole === UserRole.SUPER_ADMIN || userRole === UserRole.DEPOT_MANAGER) && (
+                {(userRole === UserRole.SUPER_ADMIN || userRole === UserRole.ADMIN) && (
                     <button
                         onClick={() => { setCurrentTank(null); setIsEditing(true); }}
                         className="bg-indigo-600 text-white px-5 py-3 rounded-lg hover:bg-indigo-700 flex items-center gap-2 font-medium shadow-sm transition-all hover:shadow-md"

@@ -30,6 +30,7 @@ import { LocationsManager } from './components/LocationsManager';
 import { TankManager } from './components/TankManager';
 import { PricingManager } from './components/PricingManager';
 import { CustomerManager } from './components/CustomerManager';
+import { UserManagement } from './components/UserManagement';
 import { CacheStatus } from './components/CacheStatus';
 import { OfflineStatus } from './components/OfflineStatus';
 import { SignIn } from './components/SignIn';
@@ -62,14 +63,14 @@ function App() {
             api.inventory.getAll(),
             api.transactions.getAll()
           ]);
-          
+
           setInventory(invData);
           setTransactions(txData);
-          
+
           // Cache data for offline use
           offlineManager.cacheData('inventory', invData);
           offlineManager.cacheData('transactions', txData);
-          
+
           // Also fetch audit logs separately
           api.audit.getAll()
             .then(auditData => {
@@ -77,26 +78,26 @@ function App() {
               offlineManager.cacheData('auditLogs', auditData);
             })
             .catch(console.error);
-            
+
         } else {
           // Offline: Use cached data
           console.log('Loading cached data for offline use');
           const cachedInventory = offlineManager.getCachedData('inventory');
           const cachedTransactions = offlineManager.getCachedData('transactions');
           const cachedAuditLogs = offlineManager.getCachedData('auditLogs');
-          
+
           setInventory(cachedInventory);
           setTransactions(cachedTransactions);
           setAuditLogs(cachedAuditLogs);
         }
       } catch (error) {
         console.error('Failed to load data:', error);
-        
+
         // Fallback to cached data on error
         const cachedInventory = offlineManager.getCachedData('inventory');
         const cachedTransactions = offlineManager.getCachedData('transactions');
         const cachedAuditLogs = offlineManager.getCachedData('auditLogs');
-        
+
         if (cachedInventory.length > 0 || cachedTransactions.length > 0) {
           console.log('Using cached data due to network error');
           setInventory(cachedInventory);
@@ -106,7 +107,7 @@ function App() {
       }
       setIsLoading(false);
     };
-    
+
     loadData();
   }, [activeTab]);
 
@@ -114,15 +115,15 @@ function App() {
   useEffect(() => {
     // Start cache manager when app loads
     cacheManager.start();
-    
+
     // Set up event listener for cache clearing notifications
     const handleCacheCleared = (event: CustomEvent) => {
       console.log('Cache cleared:', event.detail);
       // Optionally show a toast notification or update UI
     };
-    
+
     window.addEventListener('cacheCleared', handleCacheCleared as EventListener);
-    
+
     // Cleanup on component unmount
     return () => {
       cacheManager.stop();
@@ -134,7 +135,10 @@ function App() {
   const getFilteredInventory = () => {
     if (!currentUser) return [];
 
-    if (currentUser.role === UserRole.SUPER_ADMIN || currentUser.role === UserRole.AUDITOR) {
+    // Super Admin, Admin, and Accountant see all inventory
+    if (currentUser.role === UserRole.SUPER_ADMIN ||
+      currentUser.role === UserRole.ADMIN ||
+      currentUser.role === UserRole.ACCOUNTANT) {
       return inventory;
     }
 
@@ -147,7 +151,10 @@ function App() {
   const getFilteredLogs = () => {
     if (!currentUser) return [];
 
-    if (currentUser.role === UserRole.SUPER_ADMIN || currentUser.role === UserRole.AUDITOR) {
+    // Super Admin, Admin, and Accountant see all logs
+    if (currentUser.role === UserRole.SUPER_ADMIN ||
+      currentUser.role === UserRole.ADMIN ||
+      currentUser.role === UserRole.ACCOUNTANT) {
       return auditLogs;
     }
 
@@ -160,11 +167,20 @@ function App() {
   const getFilteredTransactions = () => {
     if (!currentUser) return [];
 
-    if (currentUser.role === UserRole.SUPER_ADMIN || currentUser.role === UserRole.AUDITOR) {
+    // Super Admin, Admin, Manager, and Accountant see all transactions
+    if (currentUser.role === UserRole.SUPER_ADMIN ||
+      currentUser.role === UserRole.ADMIN ||
+      currentUser.role === UserRole.MANAGER ||
+      currentUser.role === UserRole.ACCOUNTANT) {
       return transactions;
     }
 
-    // Filter transactions relevant to user's location
+    // CASHIER: Only see their own sales (performedBy matches their name)
+    if (currentUser.role === UserRole.CASHIER) {
+      return transactions.filter(t => t.performedBy === currentUser.name);
+    }
+
+    // Fallback: filter by location
     return transactions.filter(t =>
       t.source.includes(currentUser.location) ||
       t.performedBy === currentUser.name
@@ -237,11 +253,11 @@ function App() {
     if (!currentUser) return;
 
     // Determine status based on role
-    // Officers -> Pending
-    // Managers/Admins -> Approved immediately
-    const isApprover = currentUser.role === UserRole.DEPOT_MANAGER ||
-      currentUser.role === UserRole.STATION_MANAGER ||
-      currentUser.role === UserRole.SUPER_ADMIN;
+    // Cashiers -> Pending
+    // Managers/Admins/Super Admin -> Approved immediately
+    const isApprover = currentUser.role === UserRole.SUPER_ADMIN ||
+      currentUser.role === UserRole.ADMIN ||
+      currentUser.role === UserRole.MANAGER;
 
     const status = isApprover ? 'APPROVED' : 'PENDING';
 
@@ -392,6 +408,8 @@ function App() {
         return <TankManager userRole={currentUser.role} />;
       case 'pricing':
         return <PricingManager userRole={currentUser.role} />;
+      case 'users':
+        return <UserManagement currentUserRole={currentUser.role} currentUserName={currentUser.name} />;
       default:
         return <div className="text-center p-10 text-slate-500">Module under construction</div>;
     }
@@ -453,8 +471,13 @@ function App() {
           {/* Compliance is key for Auditors/Admins */}
           <NavItem id="compliance" label="SRS Compliance" icon={FileCheck} />
 
-          {/* Locations & Tanks - Admin/Manager only */}
-          {(currentUser.role === UserRole.SUPER_ADMIN || currentUser.role === UserRole.DEPOT_MANAGER) && (
+          {/* User Management - Admin/Super Admin only */}
+          {(currentUser.role === UserRole.SUPER_ADMIN || currentUser.role === UserRole.ADMIN) && (
+            <NavItem id="users" label="User Management" icon={Users} />
+          )}
+
+          {/* Locations & Tanks - Admin/Super Admin only */}
+          {(currentUser.role === UserRole.SUPER_ADMIN || currentUser.role === UserRole.ADMIN) && (
             <>
               <NavItem id="locations" label="Locations" icon={MapPin} />
               <NavItem id="tanks" label="Tank Management" icon={Fuel} />

@@ -15,7 +15,7 @@ export const PricingManager: React.FC<PricingManagerProps> = ({ userRole }) => {
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
 
     // Only authorized roles can edit
-    const canEdit = userRole === UserRole.SUPER_ADMIN || userRole === UserRole.DEPOT_MANAGER;
+    const canEdit = userRole === UserRole.SUPER_ADMIN || userRole === UserRole.ADMIN;
 
     useEffect(() => {
         loadPrices();

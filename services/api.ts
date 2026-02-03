@@ -666,5 +666,173 @@ export const api = {
             if (error || !data) return 0;
             return Number(data.price_per_liter);
         }
+    },
+
+    users: {
+        async getAll(): Promise<any[]> {
+            const { data, error } = await supabase
+                .from('users')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error || !data) {
+                console.error('Error fetching users:', error);
+                return [];
+            }
+            return data.map((u: any) => ({
+                id: u.id,
+                email: u.email,
+                name: u.name,
+                role: u.role,
+                location: u.location,
+                isActive: u.is_active !== false, // Default to true if not set
+                createdAt: u.created_at
+            }));
+        },
+
+        async create(userData: { email: string; name: string; role: string; location: string; password: string }): Promise<any | null> {
+            // Note: User creation should ideally go through Supabase Auth Admin API
+            // This is a simplified implementation
+            const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+                email: userData.email,
+                password: userData.password,
+                email_confirm: true,
+                user_metadata: {
+                    name: userData.name,
+                    role: userData.role,
+                    location: userData.location
+                }
+            });
+
+            if (authError) {
+                console.error('Error creating user:', authError);
+                // Fallback: Try to insert directly into users table (for existing auth users)
+                const { data, error } = await supabase
+                    .from('users')
+                    .insert([{
+                        email: userData.email,
+                        name: userData.name,
+                        role: userData.role,
+                        location: userData.location,
+                        is_active: true
+                    }])
+                    .select()
+                    .single();
+
+                if (error) {
+                    console.error('Error inserting user record:', error);
+                    return null;
+                }
+                return {
+                    id: data.id,
+                    email: data.email,
+                    name: data.name,
+                    role: data.role,
+                    location: data.location,
+                    isActive: data.is_active,
+                    createdAt: data.created_at
+                };
+            }
+
+            return {
+                id: authData.user.id,
+                email: userData.email,
+                name: userData.name,
+                role: userData.role,
+                location: userData.location,
+                isActive: true,
+                createdAt: new Date().toISOString()
+            };
+        },
+
+        async update(id: string, updates: Partial<{ name: string; role: string; location: string }>): Promise<any | null> {
+            const { data, error } = await supabase
+                .from('users')
+                .update({
+                    name: updates.name,
+                    role: updates.role,
+                    location: updates.location
+                })
+                .eq('id', id)
+                .select()
+                .single();
+
+            if (error) {
+                console.error('Error updating user:', error);
+                return null;
+            }
+
+            return {
+                id: data.id,
+                email: data.email,
+                name: data.name,
+                role: data.role,
+                location: data.location,
+                isActive: data.is_active,
+                createdAt: data.created_at
+            };
+        },
+
+        async updateRole(id: string, role: string): Promise<any | null> {
+            const { data, error } = await supabase
+                .from('users')
+                .update({ role })
+                .eq('id', id)
+                .select()
+                .single();
+
+            if (error) {
+                console.error('Error updating user role:', error);
+                return null;
+            }
+
+            return {
+                id: data.id,
+                email: data.email,
+                name: data.name,
+                role: data.role,
+                location: data.location,
+                isActive: data.is_active,
+                createdAt: data.created_at
+            };
+        },
+
+        async toggleStatus(id: string, isActive: boolean): Promise<any | null> {
+            const { data, error } = await supabase
+                .from('users')
+                .update({ is_active: isActive })
+                .eq('id', id)
+                .select()
+                .single();
+
+            if (error) {
+                console.error('Error toggling user status:', error);
+                return null;
+            }
+
+            return {
+                id: data.id,
+                email: data.email,
+                name: data.name,
+                role: data.role,
+                location: data.location,
+                isActive: data.is_active,
+                createdAt: data.created_at
+            };
+        },
+
+        async delete(id: string): Promise<boolean> {
+            // Soft delete by setting is_active to false, or hard delete
+            const { error } = await supabase
+                .from('users')
+                .delete()
+                .eq('id', id);
+
+            if (error) {
+                console.error('Error deleting user:', error);
+                return false;
+            }
+            return true;
+        }
     }
 };
