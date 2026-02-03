@@ -1,15 +1,9 @@
 import { supabase } from './supabaseClient';
-import { InventoryItem, Transaction, AuditLogEntry, ProductType, TransactionType, UserRole, Customer, CustomerType, Price } from '../types';
+import { InventoryItem, Transaction, AuditLogEntry, ProductType, TransactionType, UserRole, Customer, CustomerType, Price, Location } from '../types';
 
 // Location type for API
-export interface Location {
-    id: string;
-    name: string;
-    type: 'Depot' | 'Station';
-    address?: string;
-    isActive: boolean;
-    createdAt: string;
-}
+// Location type for API
+// Imported from types.ts
 
 // Inventory Service
 export const api = {

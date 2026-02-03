@@ -12,6 +12,15 @@ export enum TransactionType {
   LOSS = 'LOSS'
 }
 
+export interface Location {
+  id: string;
+  name: string;
+  type: 'Depot' | 'Station';
+  address?: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export enum UserRole {
   SUPER_ADMIN = 'Super Admin',
   ADMIN = 'Admin',

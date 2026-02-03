@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserRole, hasPermission, canManageRole } from '../types';
+import { UserRole, hasPermission, canManageRole, Location } from '../types';
 import { api } from '../services/api';
 import {
     Users,
@@ -35,6 +35,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     currentUserName
 }) => {
     const [users, setUsers] = useState<UserData[]>([]);
+    const [locations, setLocations] = useState<Location[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [searchQuery, setSearchQuery] = useState('');
     const [roleFilter, setRoleFilter] = useState<UserRole | 'all'>('all');
@@ -60,11 +61,15 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     const loadUsers = async () => {
         setIsLoading(true);
         try {
-            const data = await api.users.getAll();
-            setUsers(data);
+            const [usersData, locationsData] = await Promise.all([
+                api.users.getAll(),
+                api.locations.getAll()
+            ]);
+            setUsers(usersData);
+            setLocations(locationsData.filter(l => l.isActive));
         } catch (error) {
-            console.error('Error loading users:', error);
-            showMessage('error', 'Failed to load users');
+            console.error('Error loading data:', error);
+            showMessage('error', 'Failed to load data');
         }
         setIsLoading(false);
     };
@@ -90,7 +95,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                 email: '',
                 name: '',
                 role: UserRole.CASHIER,
-                location: 'HQ - Abuja',
+                location: locations.length > 0 ? locations[0].name : '',
                 password: ''
             });
         }
@@ -238,8 +243,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
             {/* Message */}
             {message && (
                 <div className={`p-4 rounded-lg flex items-center gap-2 ${message.type === 'success'
-                        ? 'bg-green-50 text-green-700 border border-green-200'
-                        : 'bg-red-50 text-red-700 border border-red-200'
+                    ? 'bg-green-50 text-green-700 border border-green-200'
+                    : 'bg-red-50 text-red-700 border border-red-200'
                     }`}>
                     {message.type === 'success' ? <Check className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
                     {message.text}
@@ -321,8 +326,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.isActive
-                                                ? 'bg-green-100 text-green-800'
-                                                : 'bg-red-100 text-red-800'
+                                            ? 'bg-green-100 text-green-800'
+                                            : 'bg-red-100 text-red-800'
                                             }`}>
                                             {user.isActive ? 'Active' : 'Disabled'}
                                         </span>
@@ -429,13 +434,17 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Location</label>
-                                <input
-                                    type="text"
+                                <select
                                     value={formData.location}
                                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                                     required
                                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-                                />
+                                >
+                                    <option value="">Select Location</option>
+                                    {locations.map(loc => (
+                                        <option key={loc.id} value={loc.name}>{loc.name}</option>
+                                    ))}
+                                </select>
                             </div>
                             <div className="flex justify-end gap-3 pt-4">
                                 <button
