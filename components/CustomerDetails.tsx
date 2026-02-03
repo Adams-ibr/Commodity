@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
-import { X, User, Phone, Mail, MapPin, Calendar, TrendingUp, Filter, FileText, Edit } from 'lucide-react';
+import { X, User, Phone, Mail, MapPin, Calendar, TrendingUp, Filter, FileText, Edit, Printer } from 'lucide-react';
 import { Customer, Transaction, ProductType, TransactionType, UserRole } from '../types';
+import { printReceipt } from '../utils/receiptPrinter';
 
 interface CustomerDetailsProps {
   customer: Customer;
@@ -31,7 +32,7 @@ export const CustomerDetails: React.FC<CustomerDetailsProps> = ({
 
   // Filter transactions based on customer and filters
   const filteredTransactions = useMemo(() => {
-    let filtered = transactions.filter(tx => 
+    let filtered = transactions.filter(tx =>
       tx.customerId === customer.id || tx.customerName === customer.name
     );
 
@@ -46,7 +47,7 @@ export const CustomerDetails: React.FC<CustomerDetailsProps> = ({
     if (transactionFilter.dateRange !== 'all') {
       const now = new Date();
       const cutoffDate = new Date();
-      
+
       switch (transactionFilter.dateRange) {
         case '30days':
           cutoffDate.setDate(now.getDate() - 30);
@@ -58,7 +59,7 @@ export const CustomerDetails: React.FC<CustomerDetailsProps> = ({
           cutoffDate.setFullYear(now.getFullYear() - 1);
           break;
       }
-      
+
       filtered = filtered.filter(tx => new Date(tx.timestamp) >= cutoffDate);
     }
 
@@ -67,7 +68,7 @@ export const CustomerDetails: React.FC<CustomerDetailsProps> = ({
 
   // Calculate customer statistics
   const customerStats = useMemo(() => {
-    const customerTransactions = transactions.filter(tx => 
+    const customerTransactions = transactions.filter(tx =>
       tx.customerId === customer.id || tx.customerName === customer.name
     );
 
@@ -80,7 +81,7 @@ export const CustomerDetails: React.FC<CustomerDetailsProps> = ({
       return acc;
     }, {} as Record<ProductType, number>);
 
-    const last30Days = customerTransactions.filter(tx => 
+    const last30Days = customerTransactions.filter(tx =>
       new Date(tx.timestamp) >= new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     );
 
@@ -94,11 +95,15 @@ export const CustomerDetails: React.FC<CustomerDetailsProps> = ({
     };
   }, [transactions, customer]);
 
-  const canEdit = userRole === UserRole.SUPER_ADMIN || 
-                  userRole === UserRole.DEPOT_MANAGER || 
-                  userRole === UserRole.STATION_MANAGER;
+  const canEdit = userRole === UserRole.SUPER_ADMIN ||
+    userRole === UserRole.ADMIN ||
+    userRole === UserRole.MANAGER;
 
-  const canChangeStatus = userRole === UserRole.SUPER_ADMIN || userRole === UserRole.DEPOT_MANAGER;
+  const canChangeStatus = userRole === UserRole.SUPER_ADMIN || userRole === UserRole.ADMIN;
+
+  const canReprintReceipt = userRole === UserRole.SUPER_ADMIN ||
+    userRole === UserRole.ADMIN ||
+    userRole === UserRole.MANAGER;
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -139,14 +144,12 @@ export const CustomerDetails: React.FC<CustomerDetailsProps> = ({
             <div>
               <h2 className="text-xl font-semibold text-slate-800">{customer.name}</h2>
               <div className="flex items-center gap-4 mt-1">
-                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                  customer.type === 'Dealer' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                }`}>
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${customer.type === 'Dealer' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                  }`}>
                   {customer.type}
                 </span>
-                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
-                  customer.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                }`}>
+                <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${customer.status === 'Active' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                  }`}>
                   {customer.status}
                 </span>
               </div>
@@ -332,6 +335,9 @@ export const CustomerDetails: React.FC<CustomerDetailsProps> = ({
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Volume</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Reference</th>
                       <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Status</th>
+                      {canReprintReceipt && (
+                        <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Actions</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200">
@@ -357,6 +363,29 @@ export const CustomerDetails: React.FC<CustomerDetailsProps> = ({
                             {transaction.status}
                           </span>
                         </td>
+                        {canReprintReceipt && (
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={() => printReceipt({
+                                transaction: {
+                                  type: transaction.type,
+                                  product: transaction.product,
+                                  volume: transaction.volume,
+                                  referenceDoc: transaction.referenceDoc || 'N/A',
+                                  customerName: customer.name,
+                                  timestamp: transaction.timestamp,
+                                  performedBy: transaction.performedBy,
+                                  status: transaction.status
+                                },
+                                location: transaction.source || 'Unknown Location'
+                              })}
+                              className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                              title="Reprint Receipt"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
