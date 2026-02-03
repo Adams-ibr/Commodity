@@ -132,6 +132,19 @@ export const api = {
                 customerId: t.customer_id,
                 customerName: t.customer_name
             }));
+        },
+
+        async getLastInvoiceNumber(dateStr: string): Promise<string | null> {
+            const { data, error } = await supabase
+                .from('transactions')
+                .select('reference_doc')
+                .ilike('reference_doc', `INV-${dateStr}-%`)
+                .order('reference_doc', { ascending: false })
+                .limit(1)
+                .single();
+
+            if (error || !data) return null;
+            return data.reference_doc;
         }
     },
 

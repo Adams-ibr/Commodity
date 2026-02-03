@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { InventoryItem, ProductType, CustomerType, Customer, TransactionType, Transaction } from '../types';
 import { ShoppingCart, Users, Truck, Check, Plus, X, Phone, Search, DollarSign, Scale, Printer, History } from 'lucide-react';
 import { api } from '../services/api';
-import { getNextInvoiceNumber, previewNextInvoiceNumber } from '../utils/invoiceGenerator';
+import { getNextInvoiceNumber, previewNextInvoiceNumber, syncInvoiceCounter, getTodayDateString } from '../utils/invoiceGenerator';
 import { printReceipt, createReceiptData } from '../utils/receiptPrinter';
 
 interface SalesModuleProps {
@@ -31,6 +31,17 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
 
     useEffect(() => {
         loadCustomers();
+
+        // Sync invoice counter with database to prevent duplicates
+        const syncInvoice = async () => {
+            const todayStr = getTodayDateString();
+            const lastRef = await api.transactions.getLastInvoiceNumber(todayStr);
+            if (lastRef) {
+                syncInvoiceCounter(lastRef);
+                setRefDoc(previewNextInvoiceNumber());
+            }
+        };
+        syncInvoice();
     }, []);
 
     const loadCustomers = async () => {

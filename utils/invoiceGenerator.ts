@@ -19,12 +19,36 @@ interface CounterData {
 /**
  * Get today's date in YYYYMMDD format
  */
-const getTodayDateString = (): string => {
+export const getTodayDateString = (): string => {
     const now = new Date();
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
     return `${year}${month}${day}`;
+};
+
+/**
+ * Sync counter with the latest invoice number from database
+ */
+export const syncInvoiceCounter = (lastRef: string | null) => {
+    const today = getTodayDateString();
+    if (!lastRef) return;
+
+    // Parse lastRef: INV-YYYYMMDD-NNNN
+    const parts = lastRef.split('-');
+    if (parts.length === 3) {
+        const datePart = parts[1];
+        const sequencePart = parseInt(parts[2], 10);
+
+        if (datePart === today && !isNaN(sequencePart)) {
+            // Update local storage to match DB
+            // We set it to the last used number, so next increment will be +1
+            saveCounterData(INVOICE_COUNTER_KEY, {
+                date: today,
+                counter: sequencePart
+            });
+        }
+    }
 };
 
 /**
