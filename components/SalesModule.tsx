@@ -1,15 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { InventoryItem, ProductType, CustomerType, Customer, TransactionType } from '../types';
-import { ShoppingCart, Users, Truck, Check, Plus, X, Phone, Search, DollarSign, Scale } from 'lucide-react';
+import { InventoryItem, ProductType, CustomerType, Customer, TransactionType, Transaction } from '../types';
+import { ShoppingCart, Users, Truck, Check, Plus, X, Phone, Search, DollarSign, Scale, Printer, History } from 'lucide-react';
 import { api } from '../services/api';
 import { getNextInvoiceNumber, previewNextInvoiceNumber } from '../utils/invoiceGenerator';
+import { printReceipt, createReceiptData } from '../utils/receiptPrinter';
 
 interface SalesModuleProps {
     inventory: InventoryItem[];
+    transactions?: Transaction[];
     onCommitTransaction: (data: any) => void;
 }
 
-export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTransaction }) => {
+export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transactions = [], onCommitTransaction }) => {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
     const [customerType, setCustomerType] = useState<CustomerType>(CustomerType.DEALER);
@@ -409,6 +411,85 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
                                 {customers.filter(c => c.type === CustomerType.END_USER).length}
                             </div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            {/* Recent Sales History */}
+            <div className="lg:col-span-2 mt-8">
+                <div className="bg-white rounded-lg shadow-sm border border-slate-200">
+                    <div className="p-4 border-b border-slate-200 flex justify-between items-center">
+                        <div className="flex items-center gap-2">
+                            <History className="w-5 h-5 text-slate-500" />
+                            <h3 className="font-bold text-slate-700">Recent Sales History</h3>
+                        </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left text-sm">
+                            <thead className="bg-slate-50 text-slate-600 uppercase font-medium">
+                                <tr>
+                                    <th className="px-4 py-3">Time</th>
+                                    <th className="px-4 py-3">Ref Doc</th>
+                                    <th className="px-4 py-3">Customer</th>
+                                    <th className="px-4 py-3">Product</th>
+                                    <th className="px-4 py-3">Volume</th>
+                                    <th className="px-4 py-3">Status</th>
+                                    <th className="px-4 py-3 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {transactions
+                                    .filter(t => t.type === TransactionType.SALE)
+                                    .slice(0, 10) // Show last 10 sales
+                                    .map(tx => (
+                                        <tr key={tx.id} className="hover:bg-slate-50">
+                                            <td className="px-4 py-3 text-slate-600">
+                                                {new Date(tx.timestamp).toLocaleString()}
+                                            </td>
+                                            <td className="px-4 py-3 font-mono text-slate-500">
+                                                {tx.referenceDoc}
+                                            </td>
+                                            <td className="px-4 py-3 font-medium text-slate-800">
+                                                {tx.customerName || 'Unknown'}
+                                            </td>
+                                            <td className="px-4 py-3 text-slate-600">
+                                                {tx.product}
+                                            </td>
+                                            <td className="px-4 py-3 text-slate-600">
+                                                {tx.volume.toLocaleString()} L
+                                            </td>
+                                            <td className="px-4 py-3">
+                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${tx.status === 'APPROVED' ? 'bg-green-100 text-green-800' :
+                                                    tx.status === 'PENDING' ? 'bg-amber-100 text-amber-800' :
+                                                        'bg-red-100 text-red-800'
+                                                    }`}>
+                                                    {tx.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-right">
+                                                <button
+                                                    onClick={() => printReceipt(createReceiptData({
+                                                        ...tx,
+                                                        sourceId: tx.source // Map source to sourceId for printer compatibility
+                                                    }, inventory))}
+                                                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-xs font-medium transition-colors"
+                                                    title="Reprint Receipt"
+                                                >
+                                                    <Printer className="w-3 h-3" />
+                                                    Reprint
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                {transactions.filter(t => t.type === TransactionType.SALE).length === 0 && (
+                                    <tr>
+                                        <td colSpan={7} className="px-4 py-8 text-center text-slate-400 italic">
+                                            No recent sales found.
+                                        </td>
+                                    </tr>
+                                )}
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>

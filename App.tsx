@@ -395,7 +395,7 @@ function App() {
       case 'audit':
         return <AuditView logs={visibleLogs} />;
       case 'sales':
-        return <SalesModule inventory={visibleInventory} onCommitTransaction={handleTransactionCommit} />;
+        return <SalesModule inventory={visibleInventory} transactions={visibleTransactions} onCommitTransaction={handleTransactionCommit} />;
       case 'customers':
         return <CustomerManager userRole={currentUser.role} transactions={visibleTransactions} onAuditLog={addAuditLog} />;
       case 'restock':
