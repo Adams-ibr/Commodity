@@ -8,12 +8,24 @@ let supabase: SupabaseClient;
 
 try {
     if (supabaseUrl && supabaseAnonKey) {
-        supabase = createClient(supabaseUrl, supabaseAnonKey);
+        supabase = createClient(supabaseUrl, supabaseAnonKey, {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true
+            }
+        });
         console.log('Supabase client initialized successfully');
     } else {
         console.warn('Supabase credentials missing - using mock client');
         // Create a minimal mock client that won't crash
-        supabase = createClient('https://placeholder.supabase.co', 'placeholder-key');
+        supabase = createClient('https://placeholder.supabase.co', 'placeholder-key', {
+            auth: {
+                persistSession: true,
+                autoRefreshToken: true,
+                detectSessionInUrl: true
+            }
+        });
     }
 } catch (error) {
     console.error('Failed to create Supabase client:', error);
