@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { InventoryItem, ProductType, CustomerType, Customer, TransactionType } from '../types';
-import { ShoppingCart, Users, Truck, Check, Plus, X, Phone, Search } from 'lucide-react';
+import { ShoppingCart, Users, Truck, Check, Plus, X, Phone, Search, DollarSign, Scale } from 'lucide-react';
 import { api } from '../services/api';
 
 interface SalesModuleProps {
@@ -16,6 +16,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
     const [product, setProduct] = useState<ProductType>(ProductType.PMS);
     const [sourceId, setSourceId] = useState<string>('');
     const [volume, setVolume] = useState<string>('');
+    const [amount, setAmount] = useState<string>('');
+    const [inputMode, setInputMode] = useState<'volume' | 'amount'>('volume');
     const [refDoc, setRefDoc] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState('');
     const [showAddCustomer, setShowAddCustomer] = useState(false);
@@ -52,8 +54,14 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
         fetchPrice();
     }, [product, customerType]);
 
-    // Calculate total
-    const totalAmount = currentPrice * (Number(volume) || 0);
+    // Calculate total and volume based on input mode
+    const calculatedVolume = inputMode === 'amount' && currentPrice > 0
+        ? Number(amount) / currentPrice
+        : Number(volume) || 0;
+
+    const totalAmount = inputMode === 'volume'
+        ? currentPrice * (Number(volume) || 0)
+        : Number(amount) || 0;
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
@@ -62,7 +70,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
         onCommitTransaction({
             type: TransactionType.SALE,
             product,
-            volume: Number(volume),
+            volume: inputMode === 'volume' ? Number(volume) : calculatedVolume,
             sourceId,
             destination: cust?.name || 'External Customer',
             refDoc,
@@ -74,6 +82,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
 
         // Reset form
         setVolume('');
+        setAmount('');
         setRefDoc('');
         setSourceId('');
         // Don't reset customer/product as high-frequency sales might repeat
@@ -257,24 +266,85 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Volume (Liters)</label>
-                            <input
-                                type="number"
-                                value={volume}
-                                onChange={(e) => setVolume(e.target.value)}
-                                required
-                                min="1"
-                                placeholder="0.00"
-                                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500"
-                            />
+                            <label className="block text-sm font-medium text-slate-700 mb-1">Input Mode</label>
+                            <div className="grid grid-cols-2 gap-2">
+                                <button
+                                    type="button"
+                                    onClick={() => { setInputMode('volume'); setAmount(''); }}
+                                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 transition-all text-sm ${inputMode === 'volume'
+                                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                                        : 'border-slate-200 hover:border-indigo-300'
+                                        }`}
+                                >
+                                    <Scale className="w-4 h-4" />
+                                    By Volume
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => { setInputMode('amount'); setVolume(''); }}
+                                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 transition-all text-sm ${inputMode === 'amount'
+                                        ? 'border-green-600 bg-green-50 text-green-700'
+                                        : 'border-slate-200 hover:border-green-300'
+                                        }`}
+                                >
+                                    <DollarSign className="w-4 h-4" />
+                                    By Amount
+                                </button>
+                            </div>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Total Amount (₦)</label>
-                            <div className="w-full px-3 py-2 bg-slate-100 border border-slate-300 rounded-md text-slate-700 font-bold">
-                                ₦{totalAmount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+                            {inputMode === 'volume' ? (
+                                <>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Volume (Liters)</label>
+                                    <input
+                                        type="number"
+                                        value={volume}
+                                        onChange={(e) => setVolume(e.target.value)}
+                                        required
+                                        min="1"
+                                        step="0.01"
+                                        placeholder="0.00"
+                                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500"
+                                    />
+                                </>
+                            ) : (
+                                <>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Amount (₦)</label>
+                                    <input
+                                        type="number"
+                                        value={amount}
+                                        onChange={(e) => setAmount(e.target.value)}
+                                        required
+                                        min="1"
+                                        step="0.01"
+                                        placeholder="0.00"
+                                        className="w-full px-3 py-2 border border-green-300 rounded-md focus:ring-green-500 bg-green-50"
+                                    />
+                                </>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Summary Row */}
+                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                        <div className="grid grid-cols-3 gap-4 text-center">
+                            <div>
+                                <div className="text-xs text-slate-500 uppercase font-medium">Rate</div>
+                                <div className="text-lg font-bold text-slate-700">₦{currentPrice.toLocaleString()}/L</div>
                             </div>
-                            <div className="text-xs text-slate-500 mt-1 text-right">
-                                Rate: ₦{currentPrice}/L
+                            <div>
+                                <div className="text-xs text-slate-500 uppercase font-medium">Volume</div>
+                                <div className={`text-lg font-bold ${inputMode === 'volume' ? 'text-indigo-600' : 'text-slate-700'}`}>
+                                    {inputMode === 'volume'
+                                        ? (Number(volume) || 0).toLocaleString()
+                                        : calculatedVolume.toFixed(2)} L
+                                </div>
+                            </div>
+                            <div>
+                                <div className="text-xs text-slate-500 uppercase font-medium">Total</div>
+                                <div className={`text-lg font-bold ${inputMode === 'amount' ? 'text-green-600' : 'text-slate-700'}`}>
+                                    ₦{totalAmount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+                                </div>
                             </div>
                         </div>
                     </div>
