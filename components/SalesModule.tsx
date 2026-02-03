@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { InventoryItem, ProductType, CustomerType, Customer, TransactionType } from '../types';
 import { ShoppingCart, Users, Truck, Check, Plus, X, Phone, Search, DollarSign, Scale } from 'lucide-react';
 import { api } from '../services/api';
+import { getNextInvoiceNumber, previewNextInvoiceNumber } from '../utils/invoiceGenerator';
 
 interface SalesModuleProps {
     inventory: InventoryItem[];
@@ -18,7 +19,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
     const [volume, setVolume] = useState<string>('');
     const [amount, setAmount] = useState<string>('');
     const [inputMode, setInputMode] = useState<'volume' | 'amount'>('volume');
-    const [refDoc, setRefDoc] = useState<string>('');
+    const [refDoc, setRefDoc] = useState<string>(() => previewNextInvoiceNumber());
     const [searchQuery, setSearchQuery] = useState('');
     const [showAddCustomer, setShowAddCustomer] = useState(false);
 
@@ -67,23 +68,26 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
         e.preventDefault();
         const cust = customers.find(c => c.id === selectedCustomer);
 
+        // Get the actual invoice number (this increments the counter)
+        const invoiceNumber = getNextInvoiceNumber();
+
         onCommitTransaction({
             type: TransactionType.SALE,
             product,
             volume: inputMode === 'volume' ? Number(volume) : calculatedVolume,
             sourceId,
             destination: cust?.name || 'External Customer',
-            refDoc,
+            refDoc: invoiceNumber,
             customerId: selectedCustomer,
             customerName: cust?.name,
             unitPrice: currentPrice, // Capture price at time of sale
             totalAmount: totalAmount
         });
 
-        // Reset form
+        // Reset form and get next invoice number preview
         setVolume('');
         setAmount('');
-        setRefDoc('');
+        setRefDoc(previewNextInvoiceNumber());
         setSourceId('');
         // Don't reset customer/product as high-frequency sales might repeat
     };
@@ -350,15 +354,14 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, onCommitTra
                     </div>
 
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Reference / Invoice #</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Invoice # (Auto-generated)</label>
                         <input
                             type="text"
-                            required
+                            readOnly
                             value={refDoc}
-                            onChange={(e) => setRefDoc(e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-md"
-                            placeholder="INV-..."
+                            className="w-full px-3 py-2 border border-slate-200 rounded-md bg-slate-50 text-slate-700 font-mono cursor-not-allowed"
                         />
+                        <p className="text-xs text-slate-400 mt-1">Invoice number is auto-generated with today's date</p>
                     </div>
 
                     <button

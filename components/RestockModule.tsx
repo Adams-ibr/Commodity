@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { InventoryItem, ProductType, TransactionType } from '../types';
 import { Fuel, PlusCircle, ArrowDownCircle } from 'lucide-react';
+import { getNextReceiptNumber, previewNextReceiptNumber } from '../utils/invoiceGenerator';
 
 interface RestockModuleProps {
     inventory: InventoryItem[];
@@ -11,7 +12,7 @@ export const RestockModule: React.FC<RestockModuleProps> = ({ inventory, onCommi
     const [product, setProduct] = useState<ProductType>(ProductType.PMS);
     const [targetId, setTargetId] = useState<string>('');
     const [volume, setVolume] = useState<string>('');
-    const [refDoc, setRefDoc] = useState<string>('');
+    const [refDoc, setRefDoc] = useState<string>(() => previewNextReceiptNumber());
 
     const availableTanks = inventory.filter(i => i.product === product);
 
@@ -19,18 +20,21 @@ export const RestockModule: React.FC<RestockModuleProps> = ({ inventory, onCommi
         e.preventDefault();
         const targetTank = inventory.find(i => i.id === targetId);
 
+        // Get the actual receipt number (this increments the counter)
+        const receiptNumber = getNextReceiptNumber();
+
         onCommitTransaction({
             type: TransactionType.RECEIPT,
             product,
             volume: Number(volume),
             sourceId: targetId, // For receipts, we use source logic as "affected tank" in current logic, or need adjustment
             destination: targetTank?.location || 'Depot',
-            refDoc,
+            refDoc: receiptNumber,
             performedBy: 'System Add' // In real app, from context
         });
 
         setVolume('');
-        setRefDoc('');
+        setRefDoc(previewNextReceiptNumber());
         setTargetId('');
     };
 
@@ -110,15 +114,14 @@ export const RestockModule: React.FC<RestockModuleProps> = ({ inventory, onCommi
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Waybill Number</label>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">Receipt # (Auto-generated)</label>
                         <input
                             type="text"
-                            required
+                            readOnly
                             value={refDoc}
-                            onChange={(e) => setRefDoc(e.target.value)}
-                            className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-green-500"
-                            placeholder="WB-..."
+                            className="w-full px-3 py-2 border border-slate-200 rounded-md bg-slate-50 text-slate-700 font-mono cursor-not-allowed"
                         />
+                        <p className="text-xs text-slate-400 mt-1">Receipt number is auto-generated with today's date</p>
                     </div>
                 </div>
 
