@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { InventoryItem, ProductType, CustomerType, Customer, TransactionType, Transaction } from '../types';
 import { ShoppingCart, Users, Truck, Check, Plus, X, Phone, Search, DollarSign, Scale, Printer, History } from 'lucide-react';
 import { api } from '../services/api';
-import { getNextInvoiceNumber, previewNextInvoiceNumber, syncInvoiceCounter, getTodayDateString } from '../utils/invoiceGenerator';
+import { previewNextInvoiceNumber, syncInvoiceCounter, getTodayDateString } from '../utils/invoiceGenerator';
 import { printReceipt, createReceiptData } from '../utils/receiptPrinter';
 
 interface SalesModuleProps {
@@ -81,30 +81,10 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
         e.preventDefault();
         const cust = customers.find(c => c.id === selectedCustomer);
 
-        // Get the actual invoice number from database to prevent duplicates
-        let invoiceNumber: string;
-        try {
-            const todayStr = getTodayDateString();
-            const lastRef = await api.transactions.getLastInvoiceNumber(todayStr);
-            let nextCount = 1;
-
-            if (lastRef) {
-                // Format: INV-YYYYMMDD-NNNN
-                const parts = lastRef.split('-');
-                if (parts.length === 3) {
-                    const seq = parseInt(parts[2], 10);
-                    if (!isNaN(seq)) nextCount = seq + 1;
-                }
-            }
-
-            invoiceNumber = `INV-${todayStr}-${String(nextCount).padStart(4, '0')}`;
-            // Sync local counter for next preview
-            syncInvoiceCounter(invoiceNumber);
-
-        } catch (err) {
-            console.error('Error generating invoice number, falling back to local', err);
-            invoiceNumber = getNextInvoiceNumber();
-        }
+        // Pass datePrefix instead of pre-generated invoice number
+        // The API will generate the invoice number atomically during insert
+        // This prevents duplicate invoice numbers in concurrent scenarios
+        const todayStr = getTodayDateString();
 
         onCommitTransaction({
             type: TransactionType.SALE,
@@ -112,21 +92,26 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
             volume: inputMode === 'volume' ? Number(volume) : calculatedVolume,
             sourceId,
             destination: cust?.name || 'External Customer',
-            refDoc: invoiceNumber,
+            datePrefix: todayStr, // API will generate unique invoice number
             customerId: selectedCustomer,
             customerName: cust?.name,
             unitPrice: currentPrice, // Capture price at time of sale
             totalAmount: totalAmount
         });
 
-        // Reset form and get next invoice number preview
+        // Reset form
         setVolume('');
         setAmount('');
-        // Update RefDoc preview based on the one we just generated
-        // (syncInvoiceCounter already updated local storage, so previewNext works)
-        setRefDoc(previewNextInvoiceNumber());
         setSourceId('');
-        // Don't reset customer/product as high-frequency sales might repeat
+
+        // Update invoice preview for next sale (sync from DB after a short delay)
+        setTimeout(async () => {
+            const lastRef = await api.transactions.getLastInvoiceNumber(todayStr);
+            if (lastRef) {
+                syncInvoiceCounter(lastRef);
+                setRefDoc(previewNextInvoiceNumber());
+            }
+        }, 500);
     };
 
     const handleAddCustomer = async (e: React.FormEvent) => {
@@ -505,7 +490,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
                                                 <button
                                                     onClick={() => printReceipt(createReceiptData({
                                                         ...tx,
-                                                        sourceId: tx.source // Map source to sourceId for printer compatibility
+                                                        sourceId: tx.source, // Map source to sourceId for printer compatibility
+                                                        refDoc: tx.referenceDoc // Map referenceDoc to refDoc for printer
                                                     }, inventory))}
                                                     className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-xs font-medium transition-colors"
                                                     title="Reprint Receipt"

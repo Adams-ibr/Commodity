@@ -123,6 +123,8 @@ export interface Transaction {
   status: 'PENDING' | 'APPROVED' | 'REJECTED';
   customerId?: string;
   customerName?: string;
+  unitPrice?: number;    // Price per unit at time of sale
+  totalAmount?: number;  // Total transaction amount
 }
 
 export interface AuditLogEntry {

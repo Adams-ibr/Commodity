@@ -1,4 +1,4 @@
-import { Transaction, InventoryItem } from '../types';
+import { Transaction, InventoryItem, ProductType } from '../types';
 
 interface ReceiptData {
   transaction: {
@@ -10,6 +10,8 @@ interface ReceiptData {
     timestamp: string;
     performedBy: string;
     status: string;
+    unitPrice?: number;     // Price per unit (liter or kg)
+    totalAmount?: number;   // Total transaction amount
   };
   location: string;
   companyName?: string;
@@ -162,9 +164,24 @@ export const printReceipt = (data: ReceiptData) => {
         <span class="value">${transaction.product}</span>
       </div>
       <div class="row total-row">
-        <span class="label">Volume:</span>
-        <span class="value">${transaction.volume.toLocaleString()} L</span>
+        <span class="label">${transaction.product === 'LPG (Gas)' ? 'Weight:' : 'Volume:'}</span>
+        <span class="value">${transaction.volume.toLocaleString()} ${transaction.product === 'LPG (Gas)' ? 'kg' : 'L'}</span>
       </div>
+      
+      ${transaction.unitPrice ? `
+      <div class="divider"></div>
+      <div class="row">
+        <span class="label">Unit Price:</span>
+        <span class="value">₦${transaction.unitPrice.toLocaleString('en-NG', { minimumFractionDigits: 2 })}/${transaction.product === 'LPG (Gas)' ? 'kg' : 'L'}</span>
+      </div>
+      ` : ''}
+      
+      ${transaction.totalAmount ? `
+      <div class="row total-row" style="font-size: 16px; background: #f5f5f5; padding: 8px 4px; margin: 8px -4px; border-radius: 4px;">
+        <span class="label">TOTAL:</span>
+        <span class="value">₦${transaction.totalAmount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</span>
+      </div>
+      ` : ''}
       
       ${transaction.customerName ? `
       <div class="divider"></div>
@@ -247,9 +264,11 @@ export const createReceiptData = (
       volume: txData.volume,
       referenceDoc: txData.refDoc || txData.referenceDoc || 'N/A',
       customerName: txData.customerName,
-      timestamp: new Date().toISOString(),
+      timestamp: txData.timestamp || new Date().toISOString(),
       performedBy: txData.performedBy || 'System',
-      status: txData.status || 'APPROVED'
+      status: txData.status || 'APPROVED',
+      unitPrice: txData.unitPrice,
+      totalAmount: txData.totalAmount
     },
     location: sourceItem?.location || 'Unknown Location'
   };

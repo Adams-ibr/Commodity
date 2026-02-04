@@ -71,7 +71,68 @@ export const api = {
     },
 
     transactions: {
+        /**
+         * Create a transaction with atomic invoice number generation.
+         * If tx.refDoc is provided, uses it directly.
+         * If tx.datePrefix is provided, generates a unique invoice number atomically.
+         */
         async create(tx: any): Promise<Transaction | null> {
+            // If refDoc is already provided (e.g., for non-sale transactions), use it directly
+            if (tx.refDoc && !tx.datePrefix) {
+                return this._insertTransaction(tx, tx.refDoc);
+            }
+
+            // For sales, generate invoice number atomically with retry
+            const datePrefix = tx.datePrefix || new Date().toISOString().slice(0, 10).replace(/-/g, '');
+
+            // Try up to 10 times to handle concurrent inserts
+            for (let attempt = 0; attempt < 10; attempt++) {
+                // Get the next sequence number
+                const { data: lastInvoices, error: fetchError } = await supabase
+                    .from('transactions')
+                    .select('reference_doc')
+                    .ilike('reference_doc', `INV-${datePrefix}-%`)
+                    .order('reference_doc', { ascending: false })
+                    .limit(1);
+
+                let nextSeq = 1;
+                if (!fetchError && lastInvoices && lastInvoices.length > 0) {
+                    const parts = lastInvoices[0].reference_doc.split('-');
+                    if (parts.length === 3) {
+                        const seq = parseInt(parts[2], 10);
+                        if (!isNaN(seq)) nextSeq = seq + 1;
+                    }
+                }
+
+                // Add attempt offset to reduce collision probability
+                nextSeq += attempt;
+                const invoiceNumber = `INV-${datePrefix}-${String(nextSeq).padStart(4, '0')}`;
+
+                // Try to insert with this invoice number
+                const result = await this._insertTransaction(tx, invoiceNumber);
+
+                if (result) {
+                    return result; // Success!
+                }
+
+                // If insert failed due to duplicate, retry with next number
+                console.warn(`Invoice ${invoiceNumber} collision, retrying (attempt ${attempt + 1}/10)...`);
+                await new Promise(resolve => setTimeout(resolve, 50 * (attempt + 1)));
+            }
+
+            // Ultimate fallback: timestamp-based unique suffix
+            const timestamp = Date.now().toString(36).toUpperCase();
+            const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+            const fallbackRef = `INV-${datePrefix}-T${timestamp}${randomSuffix}`;
+            console.warn('All invoice attempts failed, using timestamp fallback:', fallbackRef);
+
+            return this._insertTransaction(tx, fallbackRef);
+        },
+
+        /**
+         * Internal helper to insert a transaction with a specific reference doc
+         */
+        async _insertTransaction(tx: any, refDoc: string): Promise<Transaction | null> {
             const { data, error } = await supabase
                 .from('transactions')
                 .insert([{
@@ -82,14 +143,20 @@ export const api = {
                     destination: tx.destination,
                     customer_id: tx.customerId,
                     customer_name: tx.customerName,
-                    reference_doc: tx.refDoc,
+                    reference_doc: refDoc,
                     performed_by: tx.performedBy,
-                    status: tx.status
+                    status: tx.status,
+                    unit_price: tx.unitPrice || null,
+                    total_amount: tx.totalAmount || null
                 }])
                 .select()
                 .single();
 
             if (error) {
+                // Check if it's a unique constraint violation (duplicate invoice)
+                if (error.code === '23505' || error.message?.includes('unique') || error.message?.includes('duplicate')) {
+                    return null; // Signal to retry with different number
+                }
                 console.error('Error creating transaction:', error);
                 return null;
             }
@@ -106,7 +173,9 @@ export const api = {
                 referenceDoc: data.reference_doc,
                 status: data.status,
                 customerId: data.customer_id,
-                customerName: data.customer_name
+                customerName: data.customer_name,
+                unitPrice: data.unit_price ? Number(data.unit_price) : undefined,
+                totalAmount: data.total_amount ? Number(data.total_amount) : undefined
             };
         },
 
@@ -130,7 +199,9 @@ export const api = {
                 referenceDoc: t.reference_doc,
                 status: t.status,
                 customerId: t.customer_id,
-                customerName: t.customer_name
+                customerName: t.customer_name,
+                unitPrice: t.unit_price ? Number(t.unit_price) : undefined,
+                totalAmount: t.total_amount ? Number(t.total_amount) : undefined
             }));
         },
 
@@ -145,6 +216,61 @@ export const api = {
 
             if (error || !data) return null;
             return data.reference_doc;
+        },
+
+        /**
+         * Generate a unique invoice number atomically
+         * Uses database-level read-and-increment with retry logic to prevent duplicates
+         */
+        async getNextInvoiceNumber(dateStr: string): Promise<string> {
+            // Try up to 5 times in case of conflicts (concurrent sales)
+            for (let attempt = 0; attempt < 5; attempt++) {
+                // Get the current max invoice for today
+                const { data: lastInvoices, error: fetchError } = await supabase
+                    .from('transactions')
+                    .select('reference_doc')
+                    .ilike('reference_doc', `INV-${dateStr}-%`)
+                    .order('reference_doc', { ascending: false })
+                    .limit(1);
+
+                let nextSeq = 1;
+                if (!fetchError && lastInvoices && lastInvoices.length > 0) {
+                    const parts = lastInvoices[0].reference_doc.split('-');
+                    if (parts.length === 3) {
+                        const seq = parseInt(parts[2], 10);
+                        if (!isNaN(seq)) nextSeq = seq + 1;
+                    }
+                }
+
+                // Add attempt offset to prevent immediate re-collision
+                nextSeq += attempt;
+
+                const invoiceNumber = `INV-${dateStr}-${String(nextSeq).padStart(4, '0')}`;
+
+                // Verify this number doesn't already exist (belt and suspenders)
+                const { data: existing } = await supabase
+                    .from('transactions')
+                    .select('id')
+                    .eq('reference_doc', invoiceNumber)
+                    .maybeSingle();
+
+                if (!existing) {
+                    // This invoice number is available
+                    return invoiceNumber;
+                }
+
+                // If exists, log and retry with next number
+                console.warn(`Invoice ${invoiceNumber} already exists, retrying (attempt ${attempt + 1}/5)...`);
+
+                // Small delay to reduce collision probability on retry
+                await new Promise(resolve => setTimeout(resolve, 50 * (attempt + 1)));
+            }
+
+            // Ultimate fallback: use timestamp-based unique suffix
+            const timestamp = Date.now().toString(36).toUpperCase();
+            const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
+            console.warn(`All invoice attempts failed, using timestamp fallback`);
+            return `INV-${dateStr}-T${timestamp}${randomSuffix}`;
         }
     },
 

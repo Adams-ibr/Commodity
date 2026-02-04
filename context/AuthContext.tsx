@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { authService, AuthUser } from '../services/authService';
 import { supabase } from '../services/supabaseClient';
 import { UserRole } from '../types';
@@ -33,32 +33,92 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Check for existing session on mount
         const initAuth = async () => {
             try {
-                // Check local session first (faster and more reliable for persistence)
-                const { data: { session } } = await supabase.auth.getSession();
+                // Check local session first - this is fast and reliable for persistence
+                const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+
+                if (sessionError) {
+                    console.error('Session error:', sessionError);
+                    setUser(null);
+                    setLoading(false);
+                    return;
+                }
 
                 if (session?.user) {
-                    // Update state with session user immediately to prevent flash of login
-                    // Then verify/fetch full profile
-                    const currentUser = await authService.getCurrentUser();
-                    setUser(currentUser);
+                    // Immediately set user from session to prevent logout flash on refresh
+                    const sessionUser = session.user;
+                    const meta = sessionUser.user_metadata;
+
+                    // Set initial user state from session (fast path - no network call)
+                    const initialUser: AuthUser = {
+                        id: sessionUser.id,
+                        email: sessionUser.email || '',
+                        name: meta?.name || 'Unknown User',
+                        role: meta?.role as UserRole || UserRole.CASHIER,
+                        location: meta?.location || 'HQ - Abuja'
+                    };
+                    setUser(initialUser);
+                    setLoading(false);
+
+                    // Then fetch full profile from database in background for updated data
+                    try {
+                        const fullUser = await authService.getCurrentUser();
+                        if (fullUser) {
+                            setUser(fullUser);
+                        }
+                    } catch (profileError) {
+                        console.warn('Could not fetch full user profile, using session data:', profileError);
+                        // Keep using initialUser from session - no logout
+                    }
                 } else {
-                    // Double check with getUser just in case
-                    const currentUser = await authService.getCurrentUser();
-                    setUser(currentUser);
+                    // No session found - user is not logged in
+                    setUser(null);
+                    setLoading(false);
                 }
             } catch (error) {
                 console.error('Auth initialization error:', error);
-            } finally {
+                setUser(null);
                 setLoading(false);
             }
         };
 
         initAuth();
 
-        // Subscribe to auth state changes
-        const { data: { subscription } } = authService.onAuthStateChange((authUser) => {
-            setUser(authUser);
-            setLoading(false);
+        // Subscribe to auth state changes - but only for explicit events
+        // This prevents race conditions with the initial session check
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+            console.log('Auth state change:', event);
+
+            // Skip INITIAL_SESSION - we handle that in initAuth() above
+            // This prevents the listener from overwriting our established session
+            if (event === 'INITIAL_SESSION') {
+                return;
+            }
+
+            // For explicit sign out, clear user immediately
+            if (event === 'SIGNED_OUT') {
+                setUser(null);
+                setLoading(false);
+                return;
+            }
+
+            // For explicit sign in (user just logged in), update user
+            if (event === 'SIGNED_IN' && session?.user) {
+                try {
+                    const authUser = await authService.getCurrentUser();
+                    if (authUser) {
+                        setUser(authUser);
+                    }
+                } catch (error) {
+                    console.error('Error fetching user on sign in:', error);
+                }
+                setLoading(false);
+            }
+
+            // Handle token refresh - keep user logged in
+            if (event === 'TOKEN_REFRESHED' && session?.user) {
+                // Session is still valid, no action needed
+                console.log('Token refreshed successfully');
+            }
         });
 
         return () => {
