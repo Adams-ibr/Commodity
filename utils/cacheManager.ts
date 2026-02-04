@@ -28,7 +28,9 @@ class CacheManager {
   private lastClearTime: Date | null = null;
   private essentialKeys: string[] = [
     'auth-token',
-    'user-preferences', 
+    'galaltix-auth-token',  // Supabase session token - CRITICAL for login persistence
+    'sb-hzigzdwxwtykjqypkiln-auth-token', // Alternative Supabase auth key format
+    'user-preferences',
     'theme-settings',
     'language-setting',
     'cache-manager-config'
@@ -47,7 +49,7 @@ class CacheManager {
       },
       ...config
     };
-    
+
     // Load persisted configuration
     this.loadPersistedConfig();
   }
@@ -62,7 +64,7 @@ class CacheManager {
     }
 
     this.log('Starting cache manager with interval:', this.config.clearInterval / 1000 / 60, 'minutes');
-    
+
     // Clear caches immediately on start
     this.clearCaches();
 
@@ -123,12 +125,12 @@ class CacheManager {
 
       const endTime = performance.now();
       this.lastClearTime = new Date();
-      
+
       this.log(`Cache clearing completed in ${(endTime - startTime).toFixed(2)}ms`);
-      
+
       // Dispatch custom event for components to react to cache clearing
       window.dispatchEvent(new CustomEvent('cacheCleared', {
-        detail: { 
+        detail: {
           timestamp: this.lastClearTime,
           duration: endTime - startTime,
           clearedTypes: Object.entries(this.config.cacheTypes)
@@ -179,12 +181,12 @@ class CacheManager {
   updateConfig(newConfig: Partial<CacheConfig>): void {
     const oldInterval = this.config.clearInterval;
     this.config = { ...this.config, ...newConfig };
-    
+
     // Persist configuration
     this.persistConfig();
-    
+
     this.log('Configuration updated:', newConfig);
-    
+
     // Restart with new config if interval changed and currently running
     if (this.intervalId && oldInterval !== this.config.clearInterval) {
       this.stop();
@@ -205,7 +207,7 @@ class CacheManager {
   private async clearLocalStorage(): Promise<void> {
     try {
       const keysToRemove: string[] = [];
-      
+
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && !this.essentialKeys.includes(key)) {
@@ -288,7 +290,7 @@ class CacheManager {
       }
 
       const cacheNames = await caches.keys();
-      
+
       // Send message to service worker to clear caches
       if ('serviceWorker' in navigator && navigator.serviceWorker.controller) {
         navigator.serviceWorker.controller.postMessage({
@@ -296,11 +298,11 @@ class CacheManager {
           cacheTypes: cacheNames
         });
       }
-      
+
       // Also clear caches directly from main thread
       const deletePromises = cacheNames.map(cacheName => caches.delete(cacheName));
       await Promise.allSettled(deletePromises);
-      
+
       this.log(`Cleared ${cacheNames.length} service worker caches`);
     } catch (error) {
       this.log('Error clearing service worker caches:', error);
@@ -316,7 +318,7 @@ class CacheManager {
       // Force reload of cached resources by updating cache-busting parameters
       const links = document.querySelectorAll('link[rel="stylesheet"]');
       let updatedCount = 0;
-      
+
       links.forEach((link: Element) => {
         const href = (link as HTMLLinkElement).href;
         if (href) {
