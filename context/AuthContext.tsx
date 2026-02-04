@@ -30,98 +30,145 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
+        let isMounted = true;
+
         // Check for existing session on mount
         const initAuth = async () => {
             try {
-                // Check local session first - this is fast and reliable for persistence
+                console.log('AuthContext: Initializing auth...');
+
+                // Get session from local storage (fast, no network call)
                 const { data: { session }, error: sessionError } = await supabase.auth.getSession();
 
                 if (sessionError) {
                     console.error('Session error:', sessionError);
-                    setUser(null);
-                    setLoading(false);
+                    if (isMounted) {
+                        setUser(null);
+                        setLoading(false);
+                    }
                     return;
                 }
 
+                console.log('AuthContext: Session found?', !!session);
+
                 if (session?.user) {
-                    // Immediately set user from session to prevent logout flash on refresh
+                    // Build user from session data immediately - NO NETWORK CALLS
                     const sessionUser = session.user;
                     const meta = sessionUser.user_metadata;
 
-                    // Set initial user state from session (fast path - no network call)
                     const initialUser: AuthUser = {
                         id: sessionUser.id,
                         email: sessionUser.email || '',
-                        name: meta?.name || 'Unknown User',
+                        name: meta?.name || 'User',
                         role: meta?.role as UserRole || UserRole.CASHIER,
-                        location: meta?.location || 'HQ - Abuja'
+                        location: meta?.location || 'Default Location'
                     };
-                    setUser(initialUser);
-                    setLoading(false);
 
-                    // Then fetch full profile from database in background for updated data
-                    try {
-                        const fullUser = await authService.getCurrentUser();
-                        if (fullUser) {
-                            setUser(fullUser);
-                        }
-                    } catch (profileError) {
-                        console.warn('Could not fetch full user profile, using session data:', profileError);
-                        // Keep using initialUser from session - no logout
+                    console.log('AuthContext: Setting user from session:', initialUser.email);
+
+                    if (isMounted) {
+                        setUser(initialUser);
+                        setLoading(false);
                     }
+
+                    // OPTIONAL: Fetch full profile in background (non-blocking)
+                    // Don't let failure affect the logged-in state
+                    (async () => {
+                        try {
+                            const { data: profile } = await supabase
+                                .from('users')
+                                .select('*')
+                                .eq('id', sessionUser.id)
+                                .single();
+
+                            if (profile && isMounted) {
+                                setUser({
+                                    id: profile.id,
+                                    email: profile.email,
+                                    name: profile.name,
+                                    role: profile.role as UserRole,
+                                    location: profile.location
+                                });
+                            }
+                        } catch (err) {
+                            console.warn('Background profile fetch failed (non-critical):', err);
+                        }
+                    })();
                 } else {
-                    // No session found - user is not logged in
-                    setUser(null);
-                    setLoading(false);
+                    console.log('AuthContext: No session found, user not logged in');
+                    if (isMounted) {
+                        setUser(null);
+                        setLoading(false);
+                    }
                 }
             } catch (error) {
                 console.error('Auth initialization error:', error);
-                setUser(null);
-                setLoading(false);
+                if (isMounted) {
+                    setUser(null);
+                    setLoading(false);
+                }
             }
         };
 
         initAuth();
 
-        // Subscribe to auth state changes - but only for explicit events
-        // This prevents race conditions with the initial session check
+        // Subscribe to auth state changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-            console.log('Auth state change:', event);
+            console.log('Auth state change:', event, 'session?:', !!session);
 
-            // Skip INITIAL_SESSION - we handle that in initAuth() above
-            // This prevents the listener from overwriting our established session
-            if (event === 'INITIAL_SESSION') {
-                return;
-            }
+            // IMPORTANT: Only handle explicit user actions, not automatic events
+            switch (event) {
+                case 'INITIAL_SESSION':
+                    // We already handle this in initAuth above
+                    break;
 
-            // For explicit sign out, clear user immediately
-            if (event === 'SIGNED_OUT') {
-                setUser(null);
-                setLoading(false);
-                return;
-            }
-
-            // For explicit sign in (user just logged in), update user
-            if (event === 'SIGNED_IN' && session?.user) {
-                try {
-                    const authUser = await authService.getCurrentUser();
-                    if (authUser) {
-                        setUser(authUser);
+                case 'SIGNED_IN':
+                    // User just logged in - update state
+                    if (session?.user && isMounted) {
+                        const meta = session.user.user_metadata;
+                        setUser({
+                            id: session.user.id,
+                            email: session.user.email || '',
+                            name: meta?.name || 'User',
+                            role: meta?.role as UserRole || UserRole.CASHIER,
+                            location: meta?.location || 'Default Location'
+                        });
+                        setLoading(false);
                     }
-                } catch (error) {
-                    console.error('Error fetching user on sign in:', error);
-                }
-                setLoading(false);
-            }
+                    break;
 
-            // Handle token refresh - keep user logged in
-            if (event === 'TOKEN_REFRESHED' && session?.user) {
-                // Session is still valid, no action needed
-                console.log('Token refreshed successfully');
+                case 'SIGNED_OUT':
+                    // User explicitly logged out
+                    if (isMounted) {
+                        setUser(null);
+                        setLoading(false);
+                    }
+                    break;
+
+                case 'TOKEN_REFRESHED':
+                    console.log('Token refreshed successfully');
+                    break;
+
+                case 'USER_UPDATED':
+                    // User profile was updated
+                    if (session?.user && isMounted) {
+                        const meta = session.user.user_metadata;
+                        setUser(prev => prev ? {
+                            ...prev,
+                            name: meta?.name || prev.name,
+                            role: meta?.role as UserRole || prev.role,
+                            location: meta?.location || prev.location
+                        } : null);
+                    }
+                    break;
+
+                default:
+                    console.log('Unhandled auth event:', event);
             }
         });
 
         return () => {
+            isMounted = false;
             subscription.unsubscribe();
         };
     }, []);
