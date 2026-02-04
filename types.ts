@@ -154,3 +154,21 @@ export interface Price {
   lastUpdated: string;
   updatedBy: string;
 }
+
+export type ReconciliationStatus = 'BALANCED' | 'VARIANCE_MINOR' | 'VARIANCE_MAJOR';
+
+export interface Reconciliation {
+  id: string;
+  date: string;
+  location: string;
+  product: ProductType;
+  openingVolume: number;
+  expectedVolume: number;
+  actualVolume: number;
+  variance: number;
+  variancePercent: number;
+  status: ReconciliationStatus;
+  notes?: string;
+  reconciledBy: string;
+  createdAt: string;
+}

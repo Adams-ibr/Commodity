@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { InventoryItem, Transaction, AuditLogEntry, ProductType, TransactionType, UserRole, Customer, CustomerType, Price, Location } from '../types';
+import { InventoryItem, Transaction, AuditLogEntry, ProductType, TransactionType, UserRole, Customer, CustomerType, Price, Location, Reconciliation, ReconciliationStatus } from '../types';
 
 // Location type for API
 // Location type for API
@@ -967,6 +967,229 @@ export const api = {
                 return false;
             }
             return true;
+        }
+    },
+
+    reconciliations: {
+        async getAll(): Promise<Reconciliation[]> {
+            const { data, error } = await supabase
+                .from('reconciliations')
+                .select('*')
+                .order('created_at', { ascending: false });
+
+            if (error) {
+                console.error('Error fetching reconciliations:', error);
+                return [];
+            }
+
+            return (data || []).map(r => ({
+                id: r.id,
+                date: r.date,
+                location: r.location,
+                product: r.product as ProductType,
+                openingVolume: Number(r.opening_volume),
+                expectedVolume: Number(r.expected_volume),
+                actualVolume: Number(r.actual_volume),
+                variance: Number(r.variance),
+                variancePercent: Number(r.variance_percent),
+                status: r.status,
+                notes: r.notes,
+                reconciledBy: r.reconciled_by,
+                createdAt: r.created_at
+            }));
+        },
+
+        async getByDate(date: string): Promise<Reconciliation[]> {
+            const { data, error } = await supabase
+                .from('reconciliations')
+                .select('*')
+                .eq('date', date)
+                .order('location', { ascending: true });
+
+            if (error) {
+                console.error('Error fetching reconciliations by date:', error);
+                return [];
+            }
+
+            return (data || []).map(r => ({
+                id: r.id,
+                date: r.date,
+                location: r.location,
+                product: r.product as ProductType,
+                openingVolume: Number(r.opening_volume),
+                expectedVolume: Number(r.expected_volume),
+                actualVolume: Number(r.actual_volume),
+                variance: Number(r.variance),
+                variancePercent: Number(r.variance_percent),
+                status: r.status,
+                notes: r.notes,
+                reconciledBy: r.reconciled_by,
+                createdAt: r.created_at
+            }));
+        },
+
+        async create(recon: Omit<Reconciliation, 'id' | 'createdAt'>): Promise<Reconciliation | null> {
+            const { data, error } = await supabase
+                .from('reconciliations')
+                .insert([{
+                    date: recon.date,
+                    location: recon.location,
+                    product: recon.product,
+                    opening_volume: recon.openingVolume,
+                    expected_volume: recon.expectedVolume,
+                    actual_volume: recon.actualVolume,
+                    variance: recon.variance,
+                    variance_percent: recon.variancePercent,
+                    status: recon.status,
+                    notes: recon.notes,
+                    reconciled_by: recon.reconciledBy
+                }])
+                .select()
+                .single();
+
+            if (error) {
+                console.error('Error creating reconciliation:', error);
+                return null;
+            }
+
+            return {
+                id: data.id,
+                date: data.date,
+                location: data.location,
+                product: data.product as ProductType,
+                openingVolume: Number(data.opening_volume),
+                expectedVolume: Number(data.expected_volume),
+                actualVolume: Number(data.actual_volume),
+                variance: Number(data.variance),
+                variancePercent: Number(data.variance_percent),
+                status: data.status,
+                notes: data.notes,
+                reconciledBy: data.reconciled_by,
+                createdAt: data.created_at
+            };
+        },
+
+        async updateNotes(id: string, notes: string): Promise<boolean> {
+            const { error } = await supabase
+                .from('reconciliations')
+                .update({ notes })
+                .eq('id', id);
+
+            if (error) {
+                console.error('Error updating reconciliation notes:', error);
+                return false;
+            }
+            return true;
+        },
+
+        /**
+         * Run daily reconciliation for all inventory items
+         * Compares expected volume (opening + receipts - sales - transfers - losses) vs actual
+         */
+        async runDailyReconciliation(
+            inventory: InventoryItem[],
+            transactions: Transaction[],
+            userName: string
+        ): Promise<Reconciliation[]> {
+            const today = new Date().toISOString().split('T')[0];
+            const results: Reconciliation[] = [];
+
+            // Check if already reconciled today
+            const existing = await this.getByDate(today);
+            if (existing.length > 0) {
+                console.log('Reconciliation already exists for today');
+                return existing;
+            }
+
+            // Process each inventory item
+            for (const item of inventory) {
+                // Calculate expected volume from transactions
+                const itemTransactions = transactions.filter(t =>
+                    t.source === item.id &&
+                    t.status === 'APPROVED' &&
+                    t.timestamp.startsWith(today)
+                );
+
+                // Get opening volume (yesterday's closing or current if no previous recon)
+                const openingVolume = item.currentVolume; // Simplified - ideally from previous recon
+
+                // Calculate day's movements
+                let receipts = 0;
+                let outflows = 0;
+
+                itemTransactions.forEach(tx => {
+                    if (tx.type === TransactionType.RECEIPT) {
+                        receipts += tx.volume;
+                    } else if (tx.type === TransactionType.SALE ||
+                        tx.type === TransactionType.TRANSFER ||
+                        tx.type === TransactionType.LOSS) {
+                        outflows += tx.volume;
+                    }
+                });
+
+                const expectedVolume = openingVolume + receipts - outflows;
+                const actualVolume = item.currentVolume;
+                const variance = actualVolume - expectedVolume;
+                const variancePercent = expectedVolume !== 0
+                    ? (variance / expectedVolume) * 100
+                    : 0;
+
+                // Determine status based on variance threshold
+                let status: ReconciliationStatus;
+                const absVariancePercent = Math.abs(variancePercent);
+                if (absVariancePercent <= 0.5) {
+                    status = 'BALANCED';
+                } else if (absVariancePercent <= 2) {
+                    status = 'VARIANCE_MINOR';
+                } else {
+                    status = 'VARIANCE_MAJOR';
+                }
+
+                const recon = await this.create({
+                    date: today,
+                    location: item.location,
+                    product: item.product,
+                    openingVolume,
+                    expectedVolume,
+                    actualVolume,
+                    variance,
+                    variancePercent,
+                    status,
+                    reconciledBy: userName
+                });
+
+                if (recon) {
+                    results.push(recon);
+                }
+            }
+
+            return results;
+        },
+
+        async getStats(): Promise<{
+            totalToday: number;
+            balancedCount: number;
+            minorVarianceCount: number;
+            majorVarianceCount: number;
+            lastReconciliation: string | null;
+        }> {
+            const today = new Date().toISOString().split('T')[0];
+            const todayRecords = await this.getByDate(today);
+
+            const { data: lastRecord } = await supabase
+                .from('reconciliations')
+                .select('created_at')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .single();
+
+            return {
+                totalToday: todayRecords.length,
+                balancedCount: todayRecords.filter(r => r.status === 'BALANCED').length,
+                minorVarianceCount: todayRecords.filter(r => r.status === 'VARIANCE_MINOR').length,
+                majorVarianceCount: todayRecords.filter(r => r.status === 'VARIANCE_MAJOR').length,
+                lastReconciliation: lastRecord?.created_at || null
+            };
         }
     }
 };

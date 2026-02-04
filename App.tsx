@@ -17,7 +17,8 @@ import {
   UserCircle,
   FileCheck,
   History,
-  Users
+  Users,
+  Calculator
 } from 'lucide-react';
 import { InventoryManager } from './components/InventoryManager';
 import { InventoryStats } from './components/InventoryStats';
@@ -31,6 +32,7 @@ import { TankManager } from './components/TankManager';
 import { PricingManager } from './components/PricingManager';
 import { CustomerManager } from './components/CustomerManager';
 import { UserManagement } from './components/UserManagement';
+import { ReconciliationModule } from './components/ReconciliationModule';
 import { CacheStatus } from './components/CacheStatus';
 import { OfflineStatus } from './components/OfflineStatus';
 import { SignIn } from './components/SignIn';
@@ -42,6 +44,7 @@ import { InventoryItem, Transaction, AuditLogEntry, UserRole, TransactionType, U
 import { api } from './services/api';
 import { cacheManager } from './utils/cacheManager';
 import { offlineManager } from './utils/offlineManager';
+import { reconciliationScheduler } from './utils/reconciliationScheduler';
 
 function App() {
   const { user: currentUser, loading: authLoading, signIn, signOut } = useAuth();
@@ -127,9 +130,28 @@ function App() {
     // Cleanup on component unmount
     return () => {
       cacheManager.stop();
+      reconciliationScheduler.stop();
       window.removeEventListener('cacheCleared', handleCacheCleared as EventListener);
     };
   }, []); // Empty dependency array - run only once on mount
+
+  // Initialize reconciliation scheduler when user is logged in
+  useEffect(() => {
+    if (currentUser) {
+      reconciliationScheduler.start(
+        () => inventory,
+        () => transactions,
+        () => currentUser?.name || 'System',
+        (results) => {
+          console.log('[App] Reconciliation completed:', results.length, 'records');
+        }
+      );
+    }
+
+    return () => {
+      reconciliationScheduler.stop();
+    };
+  }, [currentUser, inventory, transactions]);
 
   // --- Data Filtering Logic based on Role & Location ---
   const getFilteredInventory = () => {
@@ -418,6 +440,16 @@ function App() {
         return <TankManager userRole={currentUser.role} />;
       case 'pricing':
         return <PricingManager userRole={currentUser.role} />;
+      case 'reconciliation':
+        return (
+          <ReconciliationModule
+            userRole={currentUser.role}
+            userName={currentUser.name}
+            inventory={visibleInventory}
+            transactions={visibleTransactions}
+            onAuditLog={addAuditLog}
+          />
+        );
       case 'users':
         return <UserManagement currentUserRole={currentUser.role} currentUserName={currentUser.name} />;
       default:
@@ -491,6 +523,14 @@ function App() {
               <NavItem id="pricing" label="Price Management" icon={DollarSign} />
             </>
           )}
+
+          {/* Reconciliation - Admin/Manager/Accountant */}
+          {(currentUser.role === UserRole.SUPER_ADMIN ||
+            currentUser.role === UserRole.ADMIN ||
+            currentUser.role === UserRole.MANAGER ||
+            currentUser.role === UserRole.ACCOUNTANT) && (
+              <NavItem id="reconciliation" label="Reconciliation" icon={Calculator} />
+            )}
         </div>
 
         <div className="p-4 border-t border-indigo-800">
