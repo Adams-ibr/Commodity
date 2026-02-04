@@ -3,6 +3,7 @@ import { Plus, Users } from 'lucide-react';
 import { CustomerList } from './CustomerList';
 import { CustomerForm } from './CustomerForm';
 import { CustomerDetails } from './CustomerDetails';
+import { CustomerImportModal } from './CustomerImportModal';
 import { Customer, Transaction, UserRole } from '../types';
 import { api } from '../services/api';
 
@@ -24,19 +25,39 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Mock data for development - replace with actual API calls
-  useEffect(() => {
-    const loadCustomers = async () => {
-      setIsLoading(true);
-      try {
-        // TODO: Replace with actual API call
-        // const customerData = await api.customers.getAll();
-        
-        // Mock data for development
+  const loadCustomers = async () => {
+    setIsLoading(true);
+    try {
+      // Try to load from API
+      const customerData = await api.customers.getAll();
+
+      if (customerData && customerData.length > 0) {
+        setCustomers(customerData);
+      } else {
+        // Fallback to mock data if API returns empty/null (or if we prefer to always show something in dev)
+        // For this feature to work properly, we want to see the imported data, so we prioritize API data.
+        // But if API is empty, we might want to show empty state instead of mock data, 
+        // OR show mock data only if we are in a pure dev/demo environment without backend.
+        // Assuming we want to see our imported customers:
+        setCustomers([]);
+
+        // If you still want mock data when DB is strictly empty, uncomment below:
+        /*
         const mockCustomers: Customer[] = [
+          // ... (existing mock data)
+        ];
+        setCustomers(mockCustomers);
+        */
+      }
+    } catch (error) {
+      console.error('Failed to load customers:', error);
+      // Fallback to mock data on error could be useful for development
+      /*
+      const mockCustomers: Customer[] = [
           {
             id: 'cust-001',
             name: 'Adebayo Petroleum Ltd',
@@ -53,48 +74,23 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
             averageTransactionSize: 50000,
             notes: 'Major dealer with excellent payment history'
           },
-          {
-            id: 'cust-002',
-            name: 'John Okafor',
-            type: 'End User',
-            contactInfo: {
-              phone: '+234 701 987 6543',
-              email: 'john.okafor@email.com'
-            },
-            status: 'Active',
-            createdDate: '2024-01-20T09:15:00Z',
-            lastTransactionDate: '2024-01-28T16:45:00Z',
-            totalPurchases: 150000,
-            averageTransactionSize: 15000,
-            notes: 'Regular customer, prefers PMS'
-          },
-          {
-            id: 'cust-003',
-            name: 'Kano Transport Services',
-            type: 'Dealer',
-            contactInfo: {
-              phone: '+234 802 555 7890',
-              address: '45 Murtala Mohammed Way, Kano'
-            },
-            status: 'Inactive',
-            createdDate: '2023-12-10T11:30:00Z',
-            lastTransactionDate: '2024-01-10T08:20:00Z',
-            totalPurchases: 800000,
-            averageTransactionSize: 40000,
-            notes: 'Account suspended pending payment resolution'
-          }
-        ];
-        
-        setCustomers(mockCustomers);
-      } catch (error) {
-        console.error('Failed to load customers:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+          // ... other mocks
+      ];
+      setCustomers(mockCustomers);
+      */
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
+  useEffect(() => {
     loadCustomers();
   }, []);
+
+  const handleImportComplete = async () => {
+    setShowImportModal(false);
+    await loadCustomers();
+  };
 
   const handleAddCustomer = () => {
     setEditingCustomer(null);
@@ -121,36 +117,36 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
         // Update existing customer
         // TODO: Replace with actual API call
         // const updatedCustomer = await api.customers.update(customerData);
-        
+
         const updatedCustomer = customerData as Customer;
         setCustomers(prev => prev.map(c => c.id === updatedCustomer.id ? updatedCustomer : c));
-        
+
         // Add audit log
         if (onAuditLog) {
           onAuditLog('CUSTOMER_UPDATE', `Updated customer: ${updatedCustomer.name}`);
         }
-        
+
         console.log('Customer updated:', updatedCustomer);
       } else {
         // Create new customer
         // TODO: Replace with actual API call
         // const newCustomer = await api.customers.create(customerData);
-        
+
         const newCustomer: Customer = {
           ...customerData,
           id: `cust-${Date.now()}`, // Generate temporary ID
         };
-        
+
         setCustomers(prev => [...prev, newCustomer]);
-        
+
         // Add audit log
         if (onAuditLog) {
           onAuditLog('CUSTOMER_CREATE', `Created new customer: ${newCustomer.name}`);
         }
-        
+
         console.log('Customer created:', newCustomer);
       }
-      
+
       setShowForm(false);
       setEditingCustomer(null);
     } catch (error) {
@@ -166,7 +162,7 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
     if (!customer) return;
 
     // Check if customer has transactions
-    const customerTransactions = transactions.filter(tx => 
+    const customerTransactions = transactions.filter(tx =>
       tx.customerId === customerId || tx.customerName === customer.name
     );
 
@@ -182,14 +178,14 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
     try {
       // TODO: Replace with actual API call
       // await api.customers.delete(customerId);
-      
+
       setCustomers(prev => prev.filter(c => c.id !== customerId));
-      
+
       // Add audit log
       if (onAuditLog) {
         onAuditLog('CUSTOMER_DELETE', `Deleted customer: ${customer.name}`);
       }
-      
+
       console.log('Customer deleted:', customer.name);
     } catch (error) {
       console.error('Failed to delete customer:', error);
@@ -203,18 +199,18 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
       if (!customer) return;
 
       const updatedCustomer = { ...customer, status };
-      
+
       // TODO: Replace with actual API call
       // await api.customers.update(updatedCustomer);
-      
+
       setCustomers(prev => prev.map(c => c.id === customerId ? updatedCustomer : c));
       setSelectedCustomer(updatedCustomer);
-      
+
       // Add audit log
       if (onAuditLog) {
         onAuditLog('CUSTOMER_STATUS_CHANGE', `Changed customer ${customer.name} status to ${status}`);
       }
-      
+
       console.log('Customer status updated:', updatedCustomer);
     } catch (error) {
       console.error('Failed to update customer status:', error);
@@ -232,9 +228,9 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
     setSelectedCustomer(null);
   };
 
-  const canAdd = userRole === UserRole.SUPER_ADMIN || 
-                 userRole === UserRole.DEPOT_MANAGER || 
-                 userRole === UserRole.STATION_MANAGER;
+  const canAdd = userRole === UserRole.SUPER_ADMIN ||
+    userRole === UserRole.DEPOT_MANAGER ||
+    userRole === UserRole.STATION_MANAGER;
 
   return (
     <div className="space-y-6">
@@ -248,13 +244,21 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
           </div>
         </div>
         {canAdd && (
-          <button
-            onClick={handleAddCustomer}
-            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 flex items-center gap-2"
-          >
-            <Plus className="w-4 h-4" />
-            Add Customer
-          </button>
+          <>
+            <button
+              onClick={() => setShowImportModal(true)}
+              className="px-4 py-2 bg-white text-indigo-600 border border-indigo-600 rounded-lg hover:bg-indigo-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 mr-2"
+            >
+              Import Excel
+            </button>
+            <button
+              onClick={handleAddCustomer}
+              className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 flex items-center gap-2"
+            >
+              <Plus className="w-4 h-4" />
+              Add Customer
+            </button>
+          </>
         )}
       </div>
 
@@ -287,6 +291,14 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
           onClose={handleCloseDetails}
           onEdit={handleEditCustomer}
           onStatusChange={handleStatusChange}
+        />
+      )}
+
+      {/* Customer Import Modal */}
+      {showImportModal && (
+        <CustomerImportModal
+          onClose={() => setShowImportModal(false)}
+          onImportComplete={handleImportComplete}
         />
       )}
     </div>

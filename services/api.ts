@@ -522,6 +522,24 @@ export const api = {
             }
         },
 
+        async bulkCreate(customers: Omit<Customer, 'id'>[]): Promise<{ success: number; failed: number; errors: string[] }> {
+            let success = 0;
+            let failed = 0;
+            const errors: string[] = [];
+
+            for (const customer of customers) {
+                const result = await this.create(customer);
+                if (result) {
+                    success++;
+                } else {
+                    failed++;
+                    errors.push(`Failed to create customer: ${customer.name}`);
+                }
+            }
+
+            return { success, failed, errors };
+        },
+
         async update(customer: Customer): Promise<Customer | null> {
             const { data, error } = await supabase
                 .from('customers')
