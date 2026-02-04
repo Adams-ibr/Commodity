@@ -262,6 +262,7 @@ function App() {
     const status = isApprover ? 'APPROVED' : 'PENDING';
 
     // Create new transaction object via API
+    // IMPORTANT: Include unitPrice and totalAmount for receipts
     const txData = {
       type: data.type,
       product: data.product,
@@ -271,8 +272,11 @@ function App() {
       customerId: data.customerId,
       customerName: data.customerName,
       refDoc: data.refDoc,
+      datePrefix: data.datePrefix, // For atomic invoice generation
       performedBy: currentUser.name,
-      status: status
+      status: status,
+      unitPrice: data.unitPrice,     // Pass through for receipt
+      totalAmount: data.totalAmount  // Pass through for receipt
     };
 
     const newTx = await api.transactions.create(txData);
@@ -296,14 +300,20 @@ function App() {
       details += ` for ${data.customerName} (${data.type === 'SALE' ? 'Sale' : 'Tx'})`;
     }
 
-    details += `. Ref: ${data.refDoc}`;
+    details += `. Ref: ${newTx.referenceDoc}`;
 
     if (status === 'APPROVED') {
       updateInventoryState(newTx);
       addAuditLog('TRANSACTION_COMMIT', details);
 
-      // Auto-print receipt
-      printReceipt(createReceiptData({ ...txData, refDoc: data.refDoc }, inventory));
+      // Auto-print receipt - use data from the created transaction plus original price data
+      printReceipt(createReceiptData({
+        ...newTx,
+        sourceId: newTx.source,
+        refDoc: newTx.referenceDoc,
+        unitPrice: data.unitPrice,     // Use original price from sales form
+        totalAmount: data.totalAmount  // Use original total from sales form
+      }, inventory));
     } else {
       addAuditLog('TRANSACTION_SUBMIT', `${details} (Pending Approval)`);
       alert("Transaction submitted for approval.");

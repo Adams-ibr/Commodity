@@ -12,7 +12,12 @@ try {
             auth: {
                 persistSession: true,
                 autoRefreshToken: true,
-                detectSessionInUrl: true
+                detectSessionInUrl: true,
+                // Explicitly use localStorage for session storage
+                storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+                storageKey: 'galaltix-auth-token',
+                // Disable flow type for simpler auth flow
+                flowType: 'implicit'
             }
         });
         console.log('Supabase client initialized successfully');
