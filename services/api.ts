@@ -843,38 +843,41 @@ export const api = {
         },
 
         async create(userData: { email: string; name: string; role: string; location: string; password: string }): Promise<any | null> {
-            // Note: User creation should ideally go through Supabase Auth Admin API
-            // This is a simplified implementation
-            const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-                email: userData.email,
-                password: userData.password,
-                email_confirm: true,
-                user_metadata: {
-                    name: userData.name,
-                    role: userData.role,
-                    location: userData.location
-                }
-            });
+            try {
+                // Get current session for authorization
+                const { data: { session } } = await supabase.auth.getSession();
 
-            if (authError) {
-                console.error('Error creating user:', authError);
-                // Fallback: Try to insert directly into users table (for existing auth users)
-                const { data, error } = await supabase
-                    .from('users')
-                    .insert([{
-                        email: userData.email,
-                        name: userData.name,
-                        role: userData.role,
-                        location: userData.location,
-                        is_active: true
-                    }])
-                    .select()
-                    .single();
-
-                if (error) {
-                    console.error('Error inserting user record:', error);
+                if (!session) {
+                    console.error('No active session');
                     return null;
                 }
+
+                // Call the serverless function to create user
+                const response = await fetch('/api/createUser', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${session.access_token}`
+                    },
+                    body: JSON.stringify(userData)
+                });
+
+                if (!response.ok) {
+                    const errorBody = await response.text();
+                    let errorMessage = 'Failed to create user';
+                    try {
+                        const errorJson = JSON.parse(errorBody);
+                        errorMessage = errorJson.error || errorMessage;
+                    } catch (e) {
+                        // use text
+                        errorMessage = errorBody;
+                    }
+                    console.error('API Error:', errorMessage);
+                    throw new Error(errorMessage);
+                }
+
+                const data = await response.json();
+
                 return {
                     id: data.id,
                     email: data.email,
@@ -884,17 +887,11 @@ export const api = {
                     isActive: data.is_active,
                     createdAt: data.created_at
                 };
-            }
 
-            return {
-                id: authData.user.id,
-                email: userData.email,
-                name: userData.name,
-                role: userData.role,
-                location: userData.location,
-                isActive: true,
-                createdAt: new Date().toISOString()
-            };
+            } catch (error) {
+                console.error('Error creating user via API:', error);
+                return null;
+            }
         },
 
         async update(id: string, updates: Partial<{ name: string; role: string; location: string }>): Promise<any | null> {
