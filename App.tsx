@@ -275,13 +275,8 @@ function App() {
     if (!currentUser) return;
 
     // Determine status based on role
-    // Cashiers -> Pending
-    // Managers/Admins/Super Admin -> Approved immediately
-    const isApprover = currentUser.role === UserRole.SUPER_ADMIN ||
-      currentUser.role === UserRole.ADMIN ||
-      currentUser.role === UserRole.MANAGER;
-
-    const status = isApprover ? 'APPROVED' : 'PENDING';
+    // Sales are now automatically approved for all roles as per new requirement
+    const status = 'APPROVED';
 
     // Create new transaction object via API
     // IMPORTANT: Include unitPrice and totalAmount for receipts
