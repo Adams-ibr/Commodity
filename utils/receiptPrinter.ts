@@ -53,8 +53,9 @@ export const printReceipt = (data: ReceiptData) => {
         }
         
         body {
-          font-family: 'Courier New', monospace;
-          font-size: 12px;
+          font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+          font-size: 14px;
+          font-weight: 600;
           width: 76mm;
           max-width: 76mm;
           margin: 0 auto;
@@ -65,62 +66,68 @@ export const printReceipt = (data: ReceiptData) => {
         
         .header {
           text-align: center;
-          border-bottom: 1px dashed #000;
+          border-bottom: 2px dashed #000;
           padding-bottom: 8px;
           margin-bottom: 8px;
         }
         
         .company-name {
-          font-size: 16px;
-          font-weight: bold;
+          font-size: 20px;
+          font-weight: 900;
           margin-bottom: 4px;
+          text-transform: uppercase;
         }
         
         .location {
-          font-size: 10px;
-          color: #333;
+          font-size: 12px;
+          color: #000;
+          font-weight: 700;
         }
         
         .receipt-type {
-          font-size: 14px;
-          font-weight: bold;
+          font-size: 18px;
+          font-weight: 900;
           text-align: center;
           margin: 10px 0;
-          padding: 4px;
-          background: #f0f0f0;
+          padding: 6px;
+          background: #eee;
+          border: 1px solid #000;
         }
         
         .row {
           display: flex;
           justify-content: space-between;
-          margin: 4px 0;
+          margin: 6px 0;
+          line-height: 1.4;
         }
         
         .label {
-          font-weight: bold;
+          font-weight: 800;
         }
         
         .value {
           text-align: right;
+          font-weight: 600;
         }
         
         .divider {
-          border-top: 1px dashed #000;
-          margin: 8px 0;
+          border-top: 2px dashed #000;
+          margin: 10px 0;
         }
         
         .total-row {
-          font-size: 14px;
-          font-weight: bold;
-          margin: 10px 0;
+          font-size: 18px;
+          font-weight: 900;
+          margin: 12px 0;
         }
         
         .footer {
           text-align: center;
-          font-size: 10px;
+          font-size: 11px;
+          font-weight: 600;
           margin-top: 12px;
           padding-top: 8px;
-          border-top: 1px dashed #000;
+          border-top: 2px dashed #000;
         }
         
         .barcode {
@@ -132,8 +139,12 @@ export const printReceipt = (data: ReceiptData) => {
         
         .ref-code {
           text-align: center;
-          font-size: 11px;
-          letter-spacing: 2px;
+          font-size: 18px;
+          font-weight: 900;
+          letter-spacing: 1px;
+          margin: 10px 0;
+          padding: 5px;
+          border: 2px solid #000;
         }
       </style>
     </head>
