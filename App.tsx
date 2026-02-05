@@ -500,7 +500,11 @@ function App() {
 
           <NavItem id="sales" label="Sales & Dealers" icon={UserCircle} />
           <NavItem id="customers" label="Customer Management" icon={Users} />
-          <NavItem id="restock" label="Add Inventory" icon={Layers} />
+
+          {/* Hide Add Inventory for Cashiers */}
+          {currentUser.role !== UserRole.CASHIER && (
+            <NavItem id="restock" label="Add Inventory" icon={Layers} />
+          )}
 
           {/* Compliance is key for Auditors/Admins */}
           <NavItem id="compliance" label="SRS Compliance" icon={FileCheck} />
