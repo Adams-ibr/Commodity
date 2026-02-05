@@ -60,9 +60,15 @@ export default async function handler(req, res) {
             return res.status(403).json({ error: 'Could not verify user permissions' });
         }
 
-        const allowedRoles = ['SUPER_ADMIN', 'ADMIN', 'MANAGER']; // Expanded to include MANAGER as they might need to add Cashiers
+        const allowedRoles = ['Super Admin', 'Admin', 'Manager'];
+
+        // Log the role for debugging purposes (remove in strict production if needed)
+        console.log(`User ${caller.id} attempting to create user. Role: ${callerProfile.role}`);
+
         if (!allowedRoles.includes(callerProfile.role)) {
-            return res.status(403).json({ error: 'Insufficient permissions to create users' });
+            return res.status(403).json({
+                error: `Insufficient permissions to create users. Your current role is: '${callerProfile.role}'. Required: Admin, Super Admin, or Manager.`
+            });
         }
 
         const { email, password, name, role, location } = req.body;

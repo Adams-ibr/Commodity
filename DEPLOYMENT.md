@@ -39,6 +39,7 @@ In the "Environment Variables" section of the Vercel project setup (or in Settin
 | `VITE_SUPABASE_URL` | *(Copy from your .env file)* |
 | `VITE_SUPABASE_ANON_KEY` | *(Copy from your .env file)* |
 | `GEMINI_API_KEY` | *(Copy from your .env file)* |
+| `SUPABASE_SERVICE_ROLE_KEY` | *(Required for user creation. Found in Supabase > Project Config > API)* |
 
 > **Note:** Do NOT check `.env` files into Git. Keeping them local and setting them manually in Vercel is the secure way.
 
