@@ -79,8 +79,9 @@ export const ReconciliationModule: React.FC<ReconciliationModuleProps> = ({
             setReconciliations(results);
             onAuditLog?.('RECONCILIATION_RUN', `Daily reconciliation completed: ${results.length} records created`);
             await loadData(); // Refresh stats
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error running reconciliation:', error);
+            alert(`Reconciliation failed: ${error.message || 'Unknown error'}`);
         } finally {
             setIsRunning(false);
         }

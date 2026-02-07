@@ -24,6 +24,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
     const [refDoc, setRefDoc] = useState<string>(() => previewNextInvoiceNumber());
     const [searchQuery, setSearchQuery] = useState('');
     const [showAddCustomer, setShowAddCustomer] = useState(false);
+    const [isDropdownOpen, setIsDropdownOpen] = useState(false);
 
     // New customer form
     const [newCustomerName, setNewCustomerName] = useState('');
@@ -136,6 +137,7 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
         if (newCustomer) {
             setCustomers([...customers, newCustomer]);
             setSelectedCustomer(newCustomer.id);
+            setSearchQuery(newCustomer.name);
             setShowAddCustomer(false);
             setNewCustomerName('');
             setNewCustomerPhone('');
@@ -185,8 +187,8 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
                         </button>
                     </div>
 
-                    {/* Customer Selection with Search */}
-                    <div>
+                    {/* Customer Selection with Autocomplete */}
+                    <div className="relative">
                         <div className="flex items-center justify-between mb-1">
                             <label className="block text-sm font-medium text-slate-700">Select Customer</label>
                             <button
@@ -199,35 +201,79 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
                             </button>
                         </div>
 
-                        {/* Search Input */}
-                        <div className="relative mb-2">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        {/* Autocomplete Input */}
+                        <div className="relative">
+                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                                <Search className="h-4 w-4 text-slate-400" />
+                            </div>
                             <input
                                 type="text"
                                 value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                placeholder={`Search ${customerType}s...`}
-                                className="w-full pl-9 pr-4 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 text-sm"
+                                onChange={(e) => {
+                                    setSearchQuery(e.target.value);
+                                    setIsDropdownOpen(true);
+                                    if (selectedCustomer) setSelectedCustomer(''); // Reset selection if user types
+                                }}
+                                onFocus={() => setIsDropdownOpen(true)}
+                                onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)} // Delay to allow click
+                                placeholder={`Search ${customerType}s by name or phone...`}
+                                className="w-full pl-10 pr-10 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
                             />
-                        </div>
-
-                        <select
-                            value={selectedCustomer}
-                            onChange={(e) => setSelectedCustomer(e.target.value)}
-                            required
-                            className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500"
-                        >
-                            <option value="">-- Select {customerType} --</option>
-                            {isLoadingCustomers ? (
-                                <option disabled>Loading...</option>
-                            ) : availableCustomers.length === 0 ? (
-                                <option disabled>No {customerType}s found</option>
-                            ) : (
-                                availableCustomers.map(c => (
-                                    <option key={c.id} value={c.id}>{c.name}</option>
-                                ))
+                            {selectedCustomer && (
+                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                                    <Check className="h-4 w-4 text-green-500" />
+                                </div>
                             )}
-                        </select>
+
+                            {/* Dropdown Results */}
+                            {isDropdownOpen && (
+                                <div className="absolute z-50 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
+                                    {isLoadingCustomers ? (
+                                        <div className="cursor-default select-none relative py-2 px-4 text-slate-500">
+                                            Loading...
+                                        </div>
+                                    ) : availableCustomers.length === 0 ? (
+                                        <div className="cursor-default select-none relative py-2 px-4 text-slate-500">
+                                            No {customerType}s found matching "{searchQuery}"
+                                        </div>
+                                    ) : (
+                                        availableCustomers.slice(0, 50).map((c) => (
+                                            <div
+                                                key={c.id}
+                                                className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-slate-50"
+                                                onMouseDown={(e) => {
+                                                    e.preventDefault(); // Prevent blur
+                                                    setSelectedCustomer(c.id);
+                                                    setSearchQuery(c.name);
+                                                    setIsDropdownOpen(false);
+                                                }}
+                                            >
+                                                <div className="flex items-center">
+                                                    <span className="font-normal block truncate">
+                                                        {c.name}
+                                                    </span>
+                                                    {c.contactInfo?.phone && (
+                                                        <span className="ml-2 text-slate-400 text-xs truncate">
+                                                            {c.contactInfo.phone}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                                {selectedCustomer === c.id && (
+                                                    <span className="text-indigo-600 absolute inset-y-0 right-0 flex items-center pr-4">
+                                                        <Check className="h-4 w-4" />
+                                                    </span>
+                                                )}
+                                            </div>
+                                        ))
+                                    )}
+                                    {availableCustomers.length > 50 && (
+                                        <div className="py-2 px-4 text-xs text-center text-slate-400 bg-slate-50 border-t border-slate-100">
+                                            Showing top 50 of {availableCustomers.length} matches. Keep typing to narrow down.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+                        </div>
 
                         {/* Selected Customer Details */}
                         {selectedCustomerDetails && (

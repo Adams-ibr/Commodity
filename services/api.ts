@@ -1070,7 +1070,7 @@ export const api = {
             }));
         },
 
-        async create(recon: Omit<Reconciliation, 'id' | 'createdAt'>): Promise<Reconciliation | null> {
+        async create(recon: Omit<Reconciliation, 'id' | 'createdAt'>): Promise<Reconciliation> {
             const { data, error } = await supabase
                 .from('reconciliations')
                 .insert([{
@@ -1091,7 +1091,7 @@ export const api = {
 
             if (error) {
                 console.error('Error creating reconciliation:', error);
-                return null;
+                throw new Error(`Failed to create reconciliation: ${error.message}`);
             }
 
             return {
