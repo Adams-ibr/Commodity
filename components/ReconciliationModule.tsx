@@ -16,7 +16,8 @@ import {
     MessageSquare
 } from 'lucide-react';
 import { api } from '../services/api';
-import { Reconciliation, InventoryItem, Transaction, UserRole, ReconciliationStatus } from '../types';
+import { Reconciliation, InventoryItem, Transaction, UserRole, ReconciliationStatus, TransactionType } from '../types';
+import { exportToCSV, exportToExcel, exportToPDF } from '../utils/exportHelper';
 
 interface ReconciliationModuleProps {
     userRole: UserRole;
@@ -39,6 +40,7 @@ export const ReconciliationModule: React.FC<ReconciliationModuleProps> = ({
     const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
     const [editingNotes, setEditingNotes] = useState<string | null>(null);
     const [notesValue, setNotesValue] = useState('');
+    const [showExportMenu, setShowExportMenu] = useState(false);
     const [stats, setStats] = useState({
         totalToday: 0,
         balancedCount: 0,
@@ -105,6 +107,27 @@ export const ReconciliationModule: React.FC<ReconciliationModuleProps> = ({
         setSelectedDate(date.toISOString().split('T')[0]);
     };
 
+    const handleExport = (format: 'csv' | 'excel' | 'pdf') => {
+        const dayTransactions = transactions.filter(t =>
+            t.timestamp.startsWith(selectedDate) && t.status === 'APPROVED'
+        );
+
+        const data = {
+            date: selectedDate,
+            reconciliations,
+            sales: dayTransactions.filter(t => t.type === TransactionType.SALE),
+            receipts: dayTransactions.filter(t => t.type === TransactionType.RECEIPT),
+            transfers: dayTransactions.filter(t => t.type === TransactionType.TRANSFER),
+            inventorySnapshot: inventory
+        };
+
+        if (format === 'csv') exportToCSV(data);
+        if (format === 'excel') exportToExcel(data);
+        if (format === 'pdf') exportToPDF(data);
+
+        setShowExportMenu(false);
+    };
+
     const getStatusIcon = (status: ReconciliationStatus) => {
         switch (status) {
             case 'BALANCED':
@@ -135,33 +158,6 @@ export const ReconciliationModule: React.FC<ReconciliationModuleProps> = ({
     const formatVariance = (num: number) => {
         const sign = num >= 0 ? '+' : '';
         return `${sign}${formatNumber(num)}`;
-    };
-
-    const exportToCSV = () => {
-        const headers = ['Date', 'Location', 'Product', 'Opening Volume', 'Expected Volume',
-            'Actual Volume', 'Variance', 'Variance %', 'Status', 'Notes', 'Reconciled By'];
-        const rows = reconciliations.map(r => [
-            r.date,
-            r.location,
-            r.product,
-            r.openingVolume,
-            r.expectedVolume,
-            r.actualVolume,
-            r.variance,
-            r.variancePercent.toFixed(2) + '%',
-            r.status,
-            r.notes || '',
-            r.reconciledBy
-        ]);
-
-        const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
-        const blob = new Blob([csv], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `reconciliation-${selectedDate}.csv`;
-        a.click();
-        URL.revokeObjectURL(url);
     };
 
     const canRunReconciliation =
@@ -255,14 +251,30 @@ export const ReconciliationModule: React.FC<ReconciliationModuleProps> = ({
                     </div>
 
                     <div className="flex items-center space-x-3">
-                        <button
-                            onClick={exportToCSV}
-                            disabled={reconciliations.length === 0}
-                            className="flex items-center space-x-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors disabled:opacity-50"
-                        >
-                            <Download className="w-4 h-4" />
-                            <span>Export CSV</span>
-                        </button>
+                        <div className="relative">
+                            <button
+                                onClick={() => setShowExportMenu(!showExportMenu)}
+                                disabled={reconciliations.length === 0}
+                                className="flex items-center space-x-2 px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                                <Download className="w-4 h-4" />
+                                <span>Export Report</span>
+                            </button>
+
+                            {showExportMenu && (
+                                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg z-50 border border-slate-200 py-1">
+                                    <button onClick={() => handleExport('pdf')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                                        Export as PDF
+                                    </button>
+                                    <button onClick={() => handleExport('excel')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                                        Export as Excel
+                                    </button>
+                                    <button onClick={() => handleExport('csv')} className="w-full text-left px-4 py-2 text-sm text-slate-700 hover:bg-slate-50">
+                                        Export as CSV
+                                    </button>
+                                </div>
+                            )}
+                        </div>
 
                         {canRunReconciliation && isToday && (
                             <button
