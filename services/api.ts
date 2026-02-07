@@ -381,15 +381,42 @@ export const api = {
 
     customers: {
         async getAll(): Promise<Customer[]> {
-            const { data, error } = await supabase
-                .from('customers')
-                .select('*')
-                .order('name');
+            let allCustomers: any[] = [];
+            let page = 0;
+            const pageSize = 1000;
+            let hasMore = true;
 
-            if (error || !data) {
-                console.error('Error fetching customers:', error);
-                return [];
+            while (hasMore) {
+                const { data, error } = await supabase
+                    .from('customers')
+                    .select('*')
+                    .order('name')
+                    .range(page * pageSize, (page + 1) * pageSize - 1);
+
+                if (error) {
+                    console.error('Error fetching customers:', error);
+                    // If we have some data, return what we have, otherwise empty
+                    if (allCustomers.length > 0) return this._mapCustomers(allCustomers);
+                    return [];
+                }
+
+                if (!data || data.length === 0) {
+                    hasMore = false;
+                } else {
+                    allCustomers = [...allCustomers, ...data];
+                    if (data.length < pageSize) {
+                        hasMore = false;
+                    } else {
+                        page++;
+                    }
+                }
             }
+
+            return this._mapCustomers(allCustomers);
+        },
+
+        // Helper to map DB response to Customer type
+        _mapCustomers(data: any[]): Customer[] {
             return data.map((c: any) => ({
                 id: c.id,
                 name: c.name,
@@ -1116,17 +1143,33 @@ export const api = {
                 return existing;
             }
 
+            // Fetch all previous reconciliations to determine opening volumes
+            // Optimization: In a larger system, we'd fetch only the latest per product via a specific query
+            const { data: allRecons } = await supabase
+                .from('reconciliations')
+                .select('*')
+                .lt('date', today) // Only get past reconciliations
+                .order('date', { ascending: false });
+
+            // Create a map of latest reconciliation per product-location
+            const latestReconMap = new Map<string, any>();
+            if (allRecons) {
+                allRecons.forEach((r: any) => {
+                    const key = `${r.location}-${r.product}`;
+                    if (!latestReconMap.has(key)) {
+                        latestReconMap.set(key, r);
+                    }
+                });
+            }
+
             // Process each inventory item
             for (const item of inventory) {
-                // Calculate expected volume from transactions
+                // Calculate transactions for TODAY only
                 const itemTransactions = transactions.filter(t =>
                     t.source === item.id &&
                     t.status === 'APPROVED' &&
                     t.timestamp.startsWith(today)
                 );
-
-                // Get opening volume (yesterday's closing or current if no previous recon)
-                const openingVolume = item.currentVolume; // Simplified - ideally from previous recon
 
                 // Calculate day's movements
                 let receipts = 0;
@@ -1142,9 +1185,29 @@ export const api = {
                     }
                 });
 
+                // Determine Opening Volume
+                // 1. Try to get from previous reconciliation (Best source of truth)
+                const key = `${item.location}-${item.product}`;
+                const previousRecon = latestReconMap.get(key);
+
+                let openingVolume: number;
+
+                if (previousRecon) {
+                    openingVolume = Number(previousRecon.actual_volume);
+                } else {
+                    // 2. If no history, back-calculate opening volume from current state
+                    // Opening = Current - Receipts + Outflows
+                    // This assumes the current system state is perfect for Day 1
+                    openingVolume = item.currentVolume - receipts + outflows;
+                }
+
                 const expectedVolume = openingVolume + receipts - outflows;
                 const actualVolume = item.currentVolume;
+
+                // Calculate variance
                 const variance = actualVolume - expectedVolume;
+
+                // Avoid division by zero
                 const variancePercent = expectedVolume !== 0
                     ? (variance / expectedVolume) * 100
                     : 0;
@@ -1152,7 +1215,9 @@ export const api = {
                 // Determine status based on variance threshold
                 let status: ReconciliationStatus;
                 const absVariancePercent = Math.abs(variancePercent);
-                if (absVariancePercent <= 0.5) {
+                if (Math.abs(variance) < 0.01) { // Floating point tolerance
+                    status = 'BALANCED';
+                } else if (absVariancePercent <= 0.5) {
                     status = 'BALANCED';
                 } else if (absVariancePercent <= 2) {
                     status = 'VARIANCE_MINOR';
@@ -1170,6 +1235,7 @@ export const api = {
                     variance,
                     variancePercent,
                     status,
+                    notes: previousRecon ? undefined : 'Initial reconciliation (system baseline)',
                     reconciledBy: userName
                 });
 

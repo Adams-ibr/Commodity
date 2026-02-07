@@ -53,7 +53,10 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
 
     const availableCustomers = customers
         .filter(c => c.type === customerType)
-        .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
+        .filter(c =>
+            c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+            (c.contactInfo?.phone && c.contactInfo.phone.includes(searchQuery))
+        );
 
     const availableInventory = inventory.filter(i => i.product === product);
 
