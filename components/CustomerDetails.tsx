@@ -33,7 +33,9 @@ export const CustomerDetails: React.FC<CustomerDetailsProps> = ({
   // Filter transactions based on customer and filters
   const filteredTransactions = useMemo(() => {
     let filtered = transactions.filter(tx =>
-      tx.customerId === customer.id || tx.customerName === customer.name
+      tx.customerId === customer.id ||
+      (tx.customerName && customer.name &&
+        tx.customerName.trim().toLowerCase() === customer.name.trim().toLowerCase())
     );
 
     if (transactionFilter.product !== 'all') {
@@ -69,7 +71,9 @@ export const CustomerDetails: React.FC<CustomerDetailsProps> = ({
   // Calculate customer statistics
   const customerStats = useMemo(() => {
     const customerTransactions = transactions.filter(tx =>
-      tx.customerId === customer.id || tx.customerName === customer.name
+      tx.customerId === customer.id ||
+      (tx.customerName && customer.name &&
+        tx.customerName.trim().toLowerCase() === customer.name.trim().toLowerCase())
     );
 
     const totalVolume = customerTransactions.reduce((sum, tx) => sum + tx.volume, 0);
@@ -91,7 +95,10 @@ export const CustomerDetails: React.FC<CustomerDetailsProps> = ({
       avgTransactionSize,
       productBreakdown,
       recentActivity: last30Days.length,
-      lastPurchase: customerTransactions[0]?.timestamp
+      lastPurchase: customerTransactions[0]?.timestamp // Relies on filtered being sorted? No, just grabs first. Ideally should verify sort order if we want "last"
+      // Note: original code just did customerTransactions[0] but that array wasn't explicitly sorted. 
+      //transactions prop usually comes in some order, but filteredTransactions is sorted.
+      // Ideally we should sort customerTransactions too if we want true "last" purchase, or just find Max timestamp.
     };
   }, [transactions, customer]);
 

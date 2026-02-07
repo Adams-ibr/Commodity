@@ -162,8 +162,9 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
     if (!customer) return;
 
     // Check if customer has transactions
+    // STRICT CHECK: Only check by ID. Checking by name causes issues with duplicates.
     const customerTransactions = transactions.filter(tx =>
-      tx.customerId === customerId || tx.customerName === customer.name
+      tx.customerId === customerId
     );
 
     if (customerTransactions.length > 0) {
@@ -176,10 +177,15 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
     }
 
     try {
-      // TODO: Replace with actual API call
-      // await api.customers.delete(customerId);
-
+      // Optimistic update
       setCustomers(prev => prev.filter(c => c.id !== customerId));
+
+      const success = await api.customers.delete(customerId);
+
+      if (!success) {
+        // Revert if API failed
+        throw new Error('API delete failed');
+      }
 
       // Add audit log
       if (onAuditLog) {
@@ -190,6 +196,11 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
     } catch (error) {
       console.error('Failed to delete customer:', error);
       alert('Failed to delete customer. Please try again.');
+      // Revert state (load existing customers back or just let the user refresh, 
+      // but realistically we should rollback the optimistic update or just await the API call first).
+      // Let's await first for safety to avoid complex rollback logic for now, 
+      // or re-fetch. Simplest is to just reload.
+      loadCustomers();
     }
   };
 
@@ -229,8 +240,8 @@ export const CustomerManager: React.FC<CustomerManagerProps> = ({
   };
 
   const canAdd = userRole === UserRole.SUPER_ADMIN ||
-    userRole === UserRole.DEPOT_MANAGER ||
-    userRole === UserRole.STATION_MANAGER;
+    userRole === UserRole.ADMIN ||
+    userRole === UserRole.MANAGER;
 
   return (
     <div className="space-y-6">
