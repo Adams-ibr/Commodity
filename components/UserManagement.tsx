@@ -126,6 +126,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                 if (updated) {
                     setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...updated } : u));
                     showMessage('success', 'User updated successfully');
+                    api.audit.log('USER_UPDATE', `Updated user: ${editingUser.name} (${editingUser.role})`, currentUserName, currentUserRole);
                 }
             } else {
                 // Create new user
@@ -139,6 +140,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                 if (created) {
                     setUsers(prev => [...prev, created]);
                     showMessage('success', 'User created successfully');
+                    api.audit.log('USER_CREATE', `Created new user: ${created.name} (${created.role})`, currentUserName, currentUserRole);
                 }
             }
             handleCloseModal();
@@ -157,6 +159,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
         if (updated) {
             setUsers(prev => prev.map(u => u.id === user.id ? { ...u, isActive: !user.isActive } : u));
             showMessage('success', `User ${user.isActive ? 'disabled' : 'enabled'} successfully`);
+            api.audit.log('USER_STATUS_CHANGE', `${user.isActive ? 'Disabled' : 'Enabled'} user: ${user.name}`, currentUserName, currentUserRole);
         }
     };
 

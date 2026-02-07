@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { authService, AuthUser } from '../services/authService';
 import { supabase } from '../services/supabaseClient';
+import { api } from '../services/api';
 import { UserRole } from '../types';
 
 interface AuthContextType {
@@ -178,6 +179,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const { user: authUser, error } = await authService.signIn({ email, password });
         if (authUser) {
             setUser(authUser);
+            // Log successful login
+            try {
+                // Using a fire-and-forget approach or awaiting it? Awaiting is safer to ensure it's logged.
+                // But we don't want to block UI too much? It's fast.
+                await api.audit.log('USER_LOGIN', 'User logged in to the system', authUser.name, authUser.role);
+            } catch (err) {
+                console.error('Failed to log login event:', err);
+                // Don't fail the login process just because logging failed
+            }
         }
         setLoading(false);
         return error;

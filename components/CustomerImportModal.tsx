@@ -220,6 +220,9 @@ export const CustomerImportModal: React.FC<CustomerImportModalProps> = ({ onClos
                                     {importResult.failed > 0 && (
                                         <span className="ml-1 text-red-600">Failed to import {importResult.failed}.</span>
                                     )}
+                                    {importResult.skipped && importResult.skipped > 0 ? (
+                                        <span className="ml-1 text-orange-600">Skipped {importResult.skipped} duplicates.</span>
+                                    ) : null}
                                 </p>
                             </div>
 
@@ -251,8 +254,8 @@ export const CustomerImportModal: React.FC<CustomerImportModalProps> = ({ onClos
                                 onClick={handleImport}
                                 disabled={!parsedData || parsedData.customers.length === 0 || isImporting}
                                 className={`px-4 py-2 rounded-lg text-white flex items-center gap-2 ${!parsedData || parsedData.customers.length === 0 || isImporting
-                                        ? 'bg-indigo-400 cursor-not-allowed'
-                                        : 'bg-indigo-600 hover:bg-indigo-700'
+                                    ? 'bg-indigo-400 cursor-not-allowed'
+                                    : 'bg-indigo-600 hover:bg-indigo-700'
                                     }`}
                             >
                                 {isImporting ? (

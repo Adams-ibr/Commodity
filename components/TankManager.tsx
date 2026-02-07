@@ -6,9 +6,10 @@ import { api } from '../services/api';
 
 interface TankManagerProps {
     userRole: string;
+    userName: string;
 }
 
-export const TankManager: React.FC<TankManagerProps> = ({ userRole }) => {
+export const TankManager: React.FC<TankManagerProps> = ({ userRole, userName }) => {
     const [tanks, setTanks] = useState<InventoryItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [isEditing, setIsEditing] = useState(false);
@@ -37,8 +38,10 @@ export const TankManager: React.FC<TankManagerProps> = ({ userRole }) => {
     const handleSave = async (item: InventoryItem) => {
         if (currentTank) {
             await api.inventory.update(item);
+            api.audit.log('TANK_UPDATE', `Updated tank: ${item.location} (${item.product})`, userName, userRole);
         } else {
             await api.inventory.create(item);
+            api.audit.log('TANK_CREATE', `Created tank: ${item.location} (${item.product})`, userName, userRole);
         }
         await loadTanks();
         setIsEditing(false);

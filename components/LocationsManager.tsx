@@ -1,12 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { MapPin, Building2, Plus, Edit2, Trash2, Save, X, Store } from 'lucide-react';
-import { api, Location } from '../services/api';
+import { api } from '../services/api';
+import { Location } from '../types';
 
 interface LocationsManagerProps {
     onLocationChange?: () => void;
+    userRole: string;
+    userName: string;
 }
 
-export const LocationsManager: React.FC<LocationsManagerProps> = ({ onLocationChange }) => {
+export const LocationsManager: React.FC<LocationsManagerProps> = ({ onLocationChange, userRole, userName }) => {
     const [locations, setLocations] = useState<Location[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
@@ -46,6 +49,7 @@ export const LocationsManager: React.FC<LocationsManagerProps> = ({ onLocationCh
                         ? { ...l, name: formData.name, type: formData.type, address: formData.address }
                         : l
                 ));
+                api.audit.log('LOCATION_UPDATE', `Updated location: ${formData.name}`, userName, userRole);
             }
         } else {
             const newLocation = await api.locations.create({
@@ -56,6 +60,7 @@ export const LocationsManager: React.FC<LocationsManagerProps> = ({ onLocationCh
             });
             if (newLocation) {
                 setLocations([...locations, newLocation]);
+                api.audit.log('LOCATION_CREATE', `Created location: ${newLocation.name}`, userName, userRole);
             }
         }
 
@@ -73,13 +78,14 @@ export const LocationsManager: React.FC<LocationsManagerProps> = ({ onLocationCh
         setShowForm(true);
     };
 
-    const handleDelete = async (id: string) => {
+    const handleDelete = async (id: string, name: string) => {
         if (!window.confirm('Are you sure you want to deactivate this location?')) return;
 
         const success = await api.locations.delete(id);
         if (success) {
             setLocations(locations.filter(l => l.id !== id));
             onLocationChange?.();
+            api.audit.log('LOCATION_DELETE', `Deleted location: ${name}`, userName, userRole);
         }
     };
 
@@ -187,8 +193,8 @@ export const LocationsManager: React.FC<LocationsManagerProps> = ({ onLocationCh
                                         type="button"
                                         onClick={() => setFormData({ ...formData, type: 'Depot' })}
                                         className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all ${formData.type === 'Depot'
-                                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                                                : 'border-slate-200 hover:border-indigo-300'
+                                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                                            : 'border-slate-200 hover:border-indigo-300'
                                             }`}
                                     >
                                         <Building2 className="w-5 h-5" />
@@ -198,8 +204,8 @@ export const LocationsManager: React.FC<LocationsManagerProps> = ({ onLocationCh
                                         type="button"
                                         onClick={() => setFormData({ ...formData, type: 'Station' })}
                                         className={`flex items-center justify-center gap-2 p-3 rounded-lg border-2 transition-all ${formData.type === 'Station'
-                                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                                                : 'border-slate-200 hover:border-indigo-300'
+                                            ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
+                                            : 'border-slate-200 hover:border-indigo-300'
                                             }`}
                                     >
                                         <Store className="w-5 h-5" />
@@ -249,8 +255,8 @@ export const LocationsManager: React.FC<LocationsManagerProps> = ({ onLocationCh
                         key={tab}
                         onClick={() => setFilter(tab)}
                         className={`px-4 py-2 font-medium text-sm border-b-2 transition-colors ${filter === tab
-                                ? 'border-indigo-600 text-indigo-600'
-                                : 'border-transparent text-slate-500 hover:text-slate-700'
+                            ? 'border-indigo-600 text-indigo-600'
+                            : 'border-transparent text-slate-500 hover:text-slate-700'
                             }`}
                     >
                         {tab === 'all' ? 'All Locations' : `${tab}s`}
@@ -278,8 +284,8 @@ export const LocationsManager: React.FC<LocationsManagerProps> = ({ onLocationCh
                             <div className="flex items-start justify-between mb-3">
                                 <div className="flex items-center gap-3">
                                     <div className={`p-2 rounded-lg ${location.type === 'Depot'
-                                            ? 'bg-amber-100'
-                                            : 'bg-emerald-100'
+                                        ? 'bg-amber-100'
+                                        : 'bg-emerald-100'
                                         }`}>
                                         {location.type === 'Depot' ? (
                                             <Building2 className="w-5 h-5 text-amber-600" />
@@ -290,8 +296,8 @@ export const LocationsManager: React.FC<LocationsManagerProps> = ({ onLocationCh
                                     <div>
                                         <h4 className="font-semibold text-slate-800">{location.name}</h4>
                                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${location.type === 'Depot'
-                                                ? 'bg-amber-50 text-amber-700'
-                                                : 'bg-emerald-50 text-emerald-700'
+                                            ? 'bg-amber-50 text-amber-700'
+                                            : 'bg-emerald-50 text-emerald-700'
                                             }`}>
                                             {location.type}
                                         </span>
@@ -305,7 +311,7 @@ export const LocationsManager: React.FC<LocationsManagerProps> = ({ onLocationCh
                                         <Edit2 className="w-4 h-4" />
                                     </button>
                                     <button
-                                        onClick={() => handleDelete(location.id)}
+                                        onClick={() => handleDelete(location.id, location.name)}
                                         className="p-2 hover:bg-red-50 rounded-lg text-slate-500 hover:text-red-600"
                                     >
                                         <Trash2 className="w-4 h-4" />

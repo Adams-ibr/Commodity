@@ -276,13 +276,18 @@ export const api = {
 
     audit: {
         async log(action: string, details: string, user: string, role: string) {
-            await supabase.from('audit_logs').insert([{
-                action,
-                details,
-                user_id: user,
-                user_role: role,
-                ip_hash: '127.0.0.1' // Placeholder
-            }]);
+            try {
+                const { error } = await supabase.from('audit_logs').insert([{
+                    action,
+                    details,
+                    user_id: user,
+                    user_role: role,
+                    ip_hash: '127.0.0.1' // Placeholder
+                }]);
+                if (error) console.error('Audit log failed:', error);
+            } catch (err) {
+                console.error('Audit log exception:', err);
+            }
         },
 
         async getAll(): Promise<AuditLogEntry[]> {
@@ -549,12 +554,43 @@ export const api = {
             }
         },
 
-        async bulkCreate(customers: Omit<Customer, 'id'>[]): Promise<{ success: number; failed: number; errors: string[] }> {
+        async bulkCreate(customers: Omit<Customer, 'id'>[]): Promise<{ success: number; failed: number; skipped: number; errors: string[] }> {
             let success = 0;
             let failed = 0;
+            let skipped = 0;
             const errors: string[] = [];
 
-            for (const customer of customers) {
+            // 1. Fetch existing customer names to prevent duplicates
+            // We fetch all names for simplicity. For massive datasets, we might want to paginate or filter by the new names,
+            // but for a typical import of a few thousand, fetching names is fine.
+            const { data: existingData, error } = await supabase
+                .from('customers')
+                .select('name');
+
+            if (error) {
+                console.error('Error fetching existing customers for deduplication:', error);
+                // Fail safe: proceed but warn, or just return error? 
+                // Let's proceed but we might create duplicates if we can't check. 
+                // Better to return error for bulk op.
+                return { success: 0, failed: 0, skipped: 0, errors: ['Failed to check for duplicates. Import aborted.'] };
+            }
+
+            const existingNames = new Set(existingData?.map(c => c.name.trim().toLowerCase()) || []);
+
+            // 2. Filter new customers
+            const newCustomers = customers.filter(c => {
+                const normalizedName = c.name.trim().toLowerCase();
+                if (existingNames.has(normalizedName)) {
+                    skipped++;
+                    return false;
+                }
+                // Also prevent duplicates within the import file itself
+                existingNames.add(normalizedName);
+                return true;
+            });
+
+            // 3. Create only new customers
+            for (const customer of newCustomers) {
                 const result = await this.create(customer);
                 if (result) {
                     success++;
@@ -564,7 +600,7 @@ export const api = {
                 }
             }
 
-            return { success, failed, errors };
+            return { success, failed, skipped, errors };
         },
 
         async update(customer: Customer): Promise<Customer | null> {

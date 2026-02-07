@@ -5,9 +5,10 @@ import { DollarSign, Save, RefreshCw, AlertCircle, CheckCircle, X } from 'lucide
 
 interface PricingManagerProps {
     userRole: string;
+    userName: string;
 }
 
-export const PricingManager: React.FC<PricingManagerProps> = ({ userRole }) => {
+export const PricingManager: React.FC<PricingManagerProps> = ({ userRole, userName }) => {
     const [prices, setPrices] = useState<Price[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [editingId, setEditingId] = useState<string | null>(null);
@@ -37,7 +38,6 @@ export const PricingManager: React.FC<PricingManagerProps> = ({ userRole }) => {
         setEditingId(null);
         setEditValue('');
     };
-
     const handleSave = async (id: string) => {
         const newValue = Number(editValue);
         if (isNaN(newValue) || newValue < 0) {
@@ -45,11 +45,20 @@ export const PricingManager: React.FC<PricingManagerProps> = ({ userRole }) => {
             return;
         }
 
-        const success = await api.prices.update(id, newValue, 'Admin'); // Ideally get current user name
+        const success = await api.prices.update(id, newValue, userName);
         if (success) {
             setMessage({ type: 'success', text: 'Price updated successfully.' });
             setPrices(prev => prev.map(p => p.id === id ? { ...p, pricePerLiter: newValue, lastUpdated: new Date().toISOString() } : p));
             setEditingId(null);
+
+            // Add audit log
+            const product = prices.find(p => p.id === id)?.product || 'Unknown Product';
+            api.audit.log(
+                'PRICE_UPDATE',
+                `Updated price for ${product} to ₦${newValue}`,
+                userName,
+                userRole
+            );
         } else {
             setMessage({ type: 'error', text: 'Failed to update price.' });
         }

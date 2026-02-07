@@ -430,11 +430,11 @@ function App() {
       case 'compliance':
         return <ComplianceDashboard rules={COMPLIANCE_RULES} />;
       case 'locations':
-        return <LocationsManager />;
+        return <LocationsManager userRole={currentUser.role} userName={currentUser.name} />;
       case 'tanks':
-        return <TankManager userRole={currentUser.role} />;
+        return <TankManager userRole={currentUser.role} userName={currentUser.name} />;
       case 'pricing':
-        return <PricingManager userRole={currentUser.role} />;
+        return <PricingManager userRole={currentUser.role} userName={currentUser.name} />;
       case 'reconciliation':
         return (
           <ReconciliationModule
