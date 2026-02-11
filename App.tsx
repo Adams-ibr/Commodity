@@ -367,6 +367,32 @@ function App() {
     alert("Transaction approved and ledger updated.");
   };
 
+  const handleTransactionDelete = async (txId: string) => {
+    if (!currentUser) return;
+
+    const tx = transactions.find(t => t.id === txId);
+    if (!tx) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete this transaction?\n\nRef: ${tx.referenceDoc}\nProduct: ${tx.product}\nVolume: ${tx.volume.toLocaleString()} L\nCustomer: ${tx.customerName || 'N/A'}\n\nThis action cannot be undone.`
+    );
+    if (!confirmed) return;
+
+    const success = await api.transactions.delete(txId);
+    if (success) {
+      setTransactions(prev => prev.filter(t => t.id !== txId));
+
+      const sourceItem = inventory.find(i => i.id === tx.source);
+      const locationName = sourceItem ? sourceItem.location : 'Unknown';
+      addAuditLog(
+        'TRANSACTION_DELETE',
+        `Deleted ${tx.type} transaction. Ref: ${tx.referenceDoc}, Product: ${tx.product}, Volume: ${tx.volume.toLocaleString()}L at ${locationName}. Customer: ${tx.customerName || 'N/A'}. Deleted by ${currentUser.name}`
+      );
+    } else {
+      alert('Failed to delete transaction. Please try again.');
+    }
+  };
+
   const handleLogout = async () => {
     await signOut();
     setActiveTab('dashboard');
@@ -422,7 +448,7 @@ function App() {
       case 'audit':
         return <AuditView logs={visibleLogs} />;
       case 'sales':
-        return <SalesModule inventory={visibleInventory} transactions={visibleTransactions} onCommitTransaction={handleTransactionCommit} />;
+        return <SalesModule inventory={visibleInventory} transactions={visibleTransactions} onCommitTransaction={handleTransactionCommit} onDeleteTransaction={handleTransactionDelete} userRole={currentUser.role} />;
       case 'customers':
         return <CustomerManager userRole={currentUser.role} transactions={visibleTransactions} onAuditLog={addAuditLog} />;
       case 'restock':

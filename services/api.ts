@@ -271,6 +271,19 @@ export const api = {
             const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
             console.warn(`All invoice attempts failed, using timestamp fallback`);
             return `INV-${dateStr}-T${timestamp}${randomSuffix}`;
+        },
+
+        async delete(id: string): Promise<boolean> {
+            const { error } = await supabase
+                .from('transactions')
+                .delete()
+                .eq('id', id);
+
+            if (error) {
+                console.error('Error deleting transaction:', error);
+                return false;
+            }
+            return true;
         }
     },
 

@@ -35,11 +35,12 @@ export type Permission =
   | 'process_sales'
   | 'manage_inventory'
   | 'view_reports'
-  | 'approve_transactions';
+  | 'approve_transactions'
+  | 'delete_transactions';
 
 export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
-  [UserRole.SUPER_ADMIN]: ['manage_users', 'view_all_sales', 'process_sales', 'manage_inventory', 'view_reports', 'approve_transactions'],
-  [UserRole.ADMIN]: ['manage_users', 'view_all_sales', 'process_sales', 'manage_inventory', 'view_reports', 'approve_transactions'],
+  [UserRole.SUPER_ADMIN]: ['manage_users', 'view_all_sales', 'process_sales', 'manage_inventory', 'view_reports', 'approve_transactions', 'delete_transactions'],
+  [UserRole.ADMIN]: ['manage_users', 'view_all_sales', 'process_sales', 'manage_inventory', 'view_reports', 'approve_transactions', 'delete_transactions'],
   [UserRole.MANAGER]: ['view_all_sales', 'process_sales', 'manage_inventory', 'view_reports', 'approve_transactions'],
   [UserRole.ACCOUNTANT]: ['view_all_sales', 'view_reports'],
   [UserRole.CASHIER]: ['process_sales']

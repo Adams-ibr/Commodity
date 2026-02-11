@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { InventoryItem, ProductType, CustomerType, Customer, TransactionType, Transaction } from '../types';
-import { ShoppingCart, Users, Truck, Check, Plus, X, Phone, Search, DollarSign, Scale, Printer, History } from 'lucide-react';
+import { InventoryItem, ProductType, CustomerType, Customer, TransactionType, Transaction, UserRole, hasPermission } from '../types';
+import { ShoppingCart, Users, Truck, Check, Plus, X, Phone, Search, DollarSign, Scale, Printer, History, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
 import { previewNextInvoiceNumber, syncInvoiceCounter, getTodayDateString } from '../utils/invoiceGenerator';
 import { printReceipt, createReceiptData } from '../utils/receiptPrinter';
@@ -9,9 +9,11 @@ interface SalesModuleProps {
     inventory: InventoryItem[];
     transactions?: Transaction[];
     onCommitTransaction: (data: any) => void;
+    onDeleteTransaction?: (id: string) => void;
+    userRole?: UserRole;
 }
 
-export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transactions = [], onCommitTransaction }) => {
+export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transactions = [], onCommitTransaction, onDeleteTransaction, userRole }) => {
     const [customers, setCustomers] = useState<Customer[]>([]);
     const [isLoadingCustomers, setIsLoadingCustomers] = useState(true);
     const [customerType, setCustomerType] = useState<CustomerType>(CustomerType.DEALER);
@@ -536,18 +538,30 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
                                                 </span>
                                             </td>
                                             <td className="px-4 py-3 text-right">
-                                                <button
-                                                    onClick={() => printReceipt(createReceiptData({
-                                                        ...tx,
-                                                        sourceId: tx.source, // Map source to sourceId for printer compatibility
-                                                        refDoc: tx.referenceDoc // Map referenceDoc to refDoc for printer
-                                                    }, inventory))}
-                                                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-xs font-medium transition-colors"
-                                                    title="Reprint Receipt"
-                                                >
-                                                    <Printer className="w-3 h-3" />
-                                                    Reprint
-                                                </button>
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <button
+                                                        onClick={() => printReceipt(createReceiptData({
+                                                            ...tx,
+                                                            sourceId: tx.source,
+                                                            refDoc: tx.referenceDoc
+                                                        }, inventory))}
+                                                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-xs font-medium transition-colors"
+                                                        title="Reprint Receipt"
+                                                    >
+                                                        <Printer className="w-3 h-3" />
+                                                        Reprint
+                                                    </button>
+                                                    {userRole && hasPermission(userRole, 'delete_transactions') && onDeleteTransaction && (
+                                                        <button
+                                                            onClick={() => onDeleteTransaction(tx.id)}
+                                                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs font-medium transition-colors"
+                                                            title="Delete Transaction"
+                                                        >
+                                                            <Trash2 className="w-3 h-3" />
+                                                            Delete
+                                                        </button>
+                                                    )}
+                                                </div>
                                             </td>
                                         </tr>
                                     ))}
