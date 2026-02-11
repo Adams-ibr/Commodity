@@ -1205,11 +1205,15 @@ export const api = {
             const today = new Date().toISOString().split('T')[0];
             const results: Reconciliation[] = [];
 
-            // Check if already reconciled today
-            const existing = await this.getByDate(today);
-            if (existing.length > 0) {
-                console.log('Reconciliation already exists for today');
-                return existing;
+            // Delete existing reconciliations for today to allow re-run/update
+            const { error: deleteError } = await supabase
+                .from('reconciliations')
+                .delete()
+                .eq('date', today);
+
+            if (deleteError) {
+                console.error('Error clearing existing reconciliations:', deleteError);
+                throw new Error('Failed to prepare for reconciliation run');
             }
 
             // Fetch all previous reconciliations to determine opening volumes

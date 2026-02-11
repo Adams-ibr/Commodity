@@ -326,10 +326,10 @@ export const ReconciliationModule: React.FC<ReconciliationModuleProps> = ({
                                 )}
                             </div>
 
-                            {canRunReconciliation && isToday && (
+                            {canRunReconciliation && (
                                 <button
                                     onClick={openManualInputForm}
-                                    disabled={isRunning || reconciliations.length > 0}
+                                    disabled={isRunning}
                                     className="flex items-center space-x-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm"
                                 >
                                     <Edit2 className="w-4 h-4" />
@@ -370,13 +370,13 @@ export const ReconciliationModule: React.FC<ReconciliationModuleProps> = ({
                         <div className="p-12 text-center">
                             <Calculator className="w-12 h-12 text-slate-300 mx-auto mb-4" />
                             <p className="text-slate-500 mb-4">No reconciliation records for this date</p>
-                            {canRunReconciliation && isToday && (
+                            {canRunReconciliation && (
                                 <button
                                     onClick={openManualInputForm}
                                     className="inline-flex items-center space-x-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors font-medium shadow-sm"
                                 >
                                     <Edit2 className="w-4 h-4" />
-                                    <span>Start Manual Reconciliation</span>
+                                    <span>{reconciliations.length > 0 ? 'Update Reconciliation' : 'Start Manual Reconciliation'}</span>
                                 </button>
                             )}
                         </div>
@@ -461,8 +461,8 @@ export const ReconciliationModule: React.FC<ReconciliationModuleProps> = ({
                                                 return (
                                                     <td className="px-6 py-4 whitespace-nowrap text-right font-mono">
                                                         <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold ${Math.abs(balance) < 0.01
-                                                                ? 'bg-green-100 text-green-700'
-                                                                : 'bg-red-100 text-red-700'
+                                                            ? 'bg-green-100 text-green-700'
+                                                            : 'bg-red-100 text-red-700'
                                                             }`}>
                                                             {Math.abs(balance) < 0.01 ? '✓ Balanced' : formatCurrency(balance)}
                                                         </span>
@@ -599,7 +599,7 @@ export const ReconciliationModule: React.FC<ReconciliationModuleProps> = ({
                                 className="flex items-center space-x-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed font-medium shadow-sm"
                             >
                                 <RefreshCw className={`w-4 h-4 ${isRunning ? 'animate-spin' : ''}`} />
-                                <span>{isRunning ? 'Running Reconciliation...' : 'Run Reconciliation'}</span>
+                                <span>{isRunning ? 'Running Reconciliation...' : (reconciliations.length > 0 ? 'Update Reconciliation' : 'Run Reconciliation')}</span>
                             </button>
                         </div>
                     </div>
