@@ -126,6 +126,7 @@ export interface Transaction {
   customerName?: string;
   unitPrice?: number;    // Price per unit at time of sale
   totalAmount?: number;  // Total transaction amount
+  paymentMethod?: 'CASH' | 'POS' | 'TRANSFER';  // Payment method used
 }
 
 export interface AuditLogEntry {
@@ -172,4 +173,11 @@ export interface Reconciliation {
   notes?: string;
   reconciledBy: string;
   createdAt: string;
+  dealerSalesAmount: number;      // ₦ total from dealer customers
+  endUserSalesVolume: number;     // Liters sold to end-users
+  endUserSalesAmount: number;     // ₦ total from end-user customers
+  expectedAmount: number;         // ₦ expected revenue (volume × price)
+  posCashless: number;            // ₦ received via POS
+  cashPayments: number;           // ₦ received as cash
+  parameters?: string;            // Additional reconciliation flags/notes
 }

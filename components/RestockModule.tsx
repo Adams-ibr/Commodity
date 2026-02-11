@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { InventoryItem, ProductType, TransactionType } from '../types';
 import { Fuel, PlusCircle, ArrowDownCircle } from 'lucide-react';
-import { getNextReceiptNumber, previewNextReceiptNumber } from '../utils/invoiceGenerator';
+import { getTodayDateString } from '../utils/invoiceGenerator';
+import { api } from '../services/api';
 
 interface RestockModuleProps {
     inventory: InventoryItem[];
@@ -12,30 +13,45 @@ export const RestockModule: React.FC<RestockModuleProps> = ({ inventory, onCommi
     const [product, setProduct] = useState<ProductType>(ProductType.PMS);
     const [targetId, setTargetId] = useState<string>('');
     const [volume, setVolume] = useState<string>('');
-    const [refDoc, setRefDoc] = useState<string>(() => previewNextReceiptNumber());
+    const [refDoc, setRefDoc] = useState<string>('');
 
     const availableTanks = inventory.filter(i => i.product === product);
+
+    useEffect(() => {
+        // Sync receipt preview from counter table
+        const syncReceipt = async () => {
+            const todayStr = getTodayDateString();
+            const currentSeq = await api.transactions.getCurrentSequence(`RCP-${todayStr}`);
+            const nextSeq = currentSeq + 1;
+            setRefDoc(`RCP-${todayStr}-${String(nextSeq).padStart(4, '0')}`);
+        };
+        syncReceipt();
+    }, []);
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         const targetTank = inventory.find(i => i.id === targetId);
-
-        // Get the actual receipt number (this increments the counter)
-        const receiptNumber = getNextReceiptNumber();
+        const todayStr = getTodayDateString();
 
         onCommitTransaction({
             type: TransactionType.RECEIPT,
             product,
             volume: Number(volume),
-            sourceId: targetId, // For receipts, we use source logic as "affected tank" in current logic, or need adjustment
+            sourceId: targetId,
             destination: targetTank?.location || 'Depot',
-            refDoc: receiptNumber,
-            performedBy: 'System Add' // In real app, from context
+            datePrefix: todayStr, // Trigger server-side auto-generation
+            performedBy: 'System Add'
         });
 
         setVolume('');
-        setRefDoc(previewNextReceiptNumber());
         setTargetId('');
+
+        // Update preview
+        setTimeout(async () => {
+            const currentSeq = await api.transactions.getCurrentSequence(`RCP-${todayStr}`);
+            const nextSeq = currentSeq + 1;
+            setRefDoc(`RCP-${todayStr}-${String(nextSeq).padStart(4, '0')}`);
+        }, 200);
     };
 
     return (

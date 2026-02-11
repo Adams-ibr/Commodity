@@ -72,61 +72,82 @@ export const api = {
 
     transactions: {
         /**
+         * Atomically get the next sequence number for a given date prefix.
+         * Uses the invoice_counters table to guarantee sequential, gap-free numbering.
+         */
+        async _getNextSequence(datePrefix: string): Promise<number> {
+            // First, ensure a row exists for this date (upsert with ON CONFLICT DO NOTHING)
+            await supabase
+                .from('invoice_counters')
+                .upsert(
+                    { date_prefix: datePrefix, current_seq: 0 },
+                    { onConflict: 'date_prefix', ignoreDuplicates: true }
+                );
+
+            // Atomically increment and read the new value using RPC
+            const { data, error } = await supabase.rpc('increment_invoice_counter', {
+                p_date_prefix: datePrefix
+            });
+
+            if (error || data === null || data === undefined) {
+                console.error('Error incrementing invoice counter:', error);
+                // Fallback: read current value and add 1
+                const { data: row } = await supabase
+                    .from('invoice_counters')
+                    .select('current_seq')
+                    .eq('date_prefix', datePrefix)
+                    .single();
+                const fallbackSeq = (row?.current_seq || 0) + 1;
+                // Try to update manually
+                await supabase
+                    .from('invoice_counters')
+                    .update({ current_seq: fallbackSeq })
+                    .eq('date_prefix', datePrefix);
+                return fallbackSeq;
+            }
+
+            return data as number;
+        },
+
+        /**
          * Create a transaction with atomic invoice number generation.
          * If tx.refDoc is provided, uses it directly.
          * If tx.datePrefix is provided, generates a unique invoice number atomically.
          */
         async create(tx: any): Promise<Transaction | null> {
-            // If refDoc is already provided (e.g., for non-sale transactions), use it directly
-            if (tx.refDoc && !tx.datePrefix) {
+            // If refDoc is already provided (e.g., for non-sale transactions) and NO datePrefix, use it directly
+            // Unless it's a RECEIPT which we now want to auto-generate if possible
+            if (tx.refDoc && !tx.datePrefix && tx.type !== 'RECEIPT') {
                 return this._insertTransaction(tx, tx.refDoc);
             }
 
-            // For sales, generate invoice number atomically with retry
-            const datePrefix = tx.datePrefix || new Date().toISOString().slice(0, 10).replace(/-/g, '');
+            // Auto-generation logic for Sales (INV) and Receipts (RCP)
+            const dateStr = tx.datePrefix || new Date().toISOString().slice(0, 10).replace(/-/g, '');
 
-            // Try up to 10 times to handle concurrent inserts
-            for (let attempt = 0; attempt < 10; attempt++) {
-                // Get the next sequence number
-                const { data: lastInvoices, error: fetchError } = await supabase
-                    .from('transactions')
-                    .select('reference_doc')
-                    .ilike('reference_doc', `INV-${datePrefix}-%`)
-                    .order('reference_doc', { ascending: false })
-                    .limit(1);
+            // Determine prefix and counter key
+            let prefix = 'INV';
+            let counterKey = dateStr; // Default for invoices (INV) to match existing DB seed
 
-                let nextSeq = 1;
-                if (!fetchError && lastInvoices && lastInvoices.length > 0) {
-                    const parts = lastInvoices[0].reference_doc.split('-');
-                    if (parts.length === 3) {
-                        const seq = parseInt(parts[2], 10);
-                        if (!isNaN(seq)) nextSeq = seq + 1;
-                    }
-                }
-
-                // Add attempt offset to reduce collision probability
-                nextSeq += attempt;
-                const invoiceNumber = `INV-${datePrefix}-${String(nextSeq).padStart(4, '0')}`;
-
-                // Try to insert with this invoice number
-                const result = await this._insertTransaction(tx, invoiceNumber);
-
-                if (result) {
-                    return result; // Success!
-                }
-
-                // If insert failed due to duplicate, retry with next number
-                console.warn(`Invoice ${invoiceNumber} collision, retrying (attempt ${attempt + 1}/10)...`);
-                await new Promise(resolve => setTimeout(resolve, 50 * (attempt + 1)));
+            if (tx.type === 'RECEIPT') {
+                prefix = 'RCP';
+                counterKey = `RCP-${dateStr}`; // Separate sequence for receipts
             }
 
-            // Ultimate fallback: timestamp-based unique suffix
-            const timestamp = Date.now().toString(36).toUpperCase();
-            const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
-            const fallbackRef = `INV-${datePrefix}-T${timestamp}${randomSuffix}`;
-            console.warn('All invoice attempts failed, using timestamp fallback:', fallbackRef);
+            // Get next sequence
+            const nextSeq = await this._getNextSequence(counterKey);
+            const refNumber = `${prefix}-${dateStr}-${String(nextSeq).padStart(4, '0')}`;
 
-            return this._insertTransaction(tx, fallbackRef);
+            // If the caller provided a manual refDoc but we auto-generated one, we override it.
+            // This enforces server-side generation for consistency.
+
+            const result = await this._insertTransaction(tx, refNumber);
+            if (result) {
+                return result;
+            }
+
+            // If insert failed (very unlikely with atomic counter), log and return null
+            console.error(`Failed to insert transaction with ref ${refNumber}`);
+            return null;
         },
 
         /**
@@ -147,7 +168,8 @@ export const api = {
                     performed_by: tx.performedBy,
                     status: tx.status,
                     unit_price: tx.unitPrice || null,
-                    total_amount: tx.totalAmount || null
+                    total_amount: tx.totalAmount || null,
+                    payment_method: tx.paymentMethod || null
                 }])
                 .select()
                 .single();
@@ -175,7 +197,8 @@ export const api = {
                 customerId: data.customer_id,
                 customerName: data.customer_name,
                 unitPrice: data.unit_price ? Number(data.unit_price) : undefined,
-                totalAmount: data.total_amount ? Number(data.total_amount) : undefined
+                totalAmount: data.total_amount ? Number(data.total_amount) : undefined,
+                paymentMethod: data.payment_method || undefined
             };
         },
 
@@ -201,76 +224,43 @@ export const api = {
                 customerId: t.customer_id,
                 customerName: t.customer_name,
                 unitPrice: t.unit_price ? Number(t.unit_price) : undefined,
-                totalAmount: t.total_amount ? Number(t.total_amount) : undefined
+                totalAmount: t.total_amount ? Number(t.total_amount) : undefined,
+                paymentMethod: t.payment_method || undefined
             }));
         },
 
+        /**
+         * Get the current invoice counter value for a given date.
+         * Returns the last used invoice number string, or null if none exist.
+         */
         async getLastInvoiceNumber(dateStr: string): Promise<string | null> {
             const { data, error } = await supabase
-                .from('transactions')
-                .select('reference_doc')
-                .ilike('reference_doc', `INV-${dateStr}-%`)
-                .order('reference_doc', { ascending: false })
-                .limit(1)
-                .single();
+                .from('invoice_counters')
+                .select('current_seq')
+                .eq('date_prefix', dateStr)
+                .maybeSingle();
 
-            if (error || !data) return null;
-            return data.reference_doc;
+            if (error || !data || data.current_seq === 0) return null;
+            return `INV-${dateStr}-${String(data.current_seq).padStart(4, '0')}`;
         },
 
         /**
-         * Generate a unique invoice number atomically
-         * Uses database-level read-and-increment with retry logic to prevent duplicates
+         * Get the current counter value for any key (date prefix or arbitrary key)
+         * Useful for previewing next sequence number
          */
-        async getNextInvoiceNumber(dateStr: string): Promise<string> {
-            // Try up to 5 times in case of conflicts (concurrent sales)
-            for (let attempt = 0; attempt < 5; attempt++) {
-                // Get the current max invoice for today
-                const { data: lastInvoices, error: fetchError } = await supabase
-                    .from('transactions')
-                    .select('reference_doc')
-                    .ilike('reference_doc', `INV-${dateStr}-%`)
-                    .order('reference_doc', { ascending: false })
-                    .limit(1);
+        async getCurrentSequence(counterKey: string): Promise<number> {
+            const { data } = await supabase
+                .from('invoice_counters')
+                .select('current_seq')
+                .eq('date_prefix', counterKey)
+                .maybeSingle();
 
-                let nextSeq = 1;
-                if (!fetchError && lastInvoices && lastInvoices.length > 0) {
-                    const parts = lastInvoices[0].reference_doc.split('-');
-                    if (parts.length === 3) {
-                        const seq = parseInt(parts[2], 10);
-                        if (!isNaN(seq)) nextSeq = seq + 1;
-                    }
-                }
+            return data?.current_seq || 0;
+        },
 
-                // Add attempt offset to prevent immediate re-collision
-                nextSeq += attempt;
-
-                const invoiceNumber = `INV-${dateStr}-${String(nextSeq).padStart(4, '0')}`;
-
-                // Verify this number doesn't already exist (belt and suspenders)
-                const { data: existing } = await supabase
-                    .from('transactions')
-                    .select('id')
-                    .eq('reference_doc', invoiceNumber)
-                    .maybeSingle();
-
-                if (!existing) {
-                    // This invoice number is available
-                    return invoiceNumber;
-                }
-
-                // If exists, log and retry with next number
-                console.warn(`Invoice ${invoiceNumber} already exists, retrying (attempt ${attempt + 1}/5)...`);
-
-                // Small delay to reduce collision probability on retry
-                await new Promise(resolve => setTimeout(resolve, 50 * (attempt + 1)));
-            }
-
-            // Ultimate fallback: use timestamp-based unique suffix
-            const timestamp = Date.now().toString(36).toUpperCase();
-            const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
-            console.warn(`All invoice attempts failed, using timestamp fallback`);
-            return `INV-${dateStr}-T${timestamp}${randomSuffix}`;
+        // Backward compatibility alias
+        async getCurrentInvoiceSeq(dateStr: string): Promise<number> {
+            return this.getCurrentSequence(dateStr);
         },
 
         async delete(id: string): Promise<boolean> {
@@ -1086,7 +1076,14 @@ export const api = {
                 status: r.status,
                 notes: r.notes,
                 reconciledBy: r.reconciled_by,
-                createdAt: r.created_at
+                createdAt: r.created_at,
+                dealerSalesAmount: Number(r.dealer_sales_amount || 0),
+                endUserSalesVolume: Number(r.end_user_sales_volume || 0),
+                endUserSalesAmount: Number(r.end_user_sales_amount || 0),
+                expectedAmount: Number(r.expected_amount || 0),
+                posCashless: Number(r.pos_cashless || 0),
+                cashPayments: Number(r.cash_payments || 0),
+                parameters: r.parameters || undefined
             }));
         },
 
@@ -1115,7 +1112,14 @@ export const api = {
                 status: r.status,
                 notes: r.notes,
                 reconciledBy: r.reconciled_by,
-                createdAt: r.created_at
+                createdAt: r.created_at,
+                dealerSalesAmount: Number(r.dealer_sales_amount || 0),
+                endUserSalesVolume: Number(r.end_user_sales_volume || 0),
+                endUserSalesAmount: Number(r.end_user_sales_amount || 0),
+                expectedAmount: Number(r.expected_amount || 0),
+                posCashless: Number(r.pos_cashless || 0),
+                cashPayments: Number(r.cash_payments || 0),
+                parameters: r.parameters || undefined
             }));
         },
 
@@ -1133,7 +1137,14 @@ export const api = {
                     variance_percent: recon.variancePercent,
                     status: recon.status,
                     notes: recon.notes,
-                    reconciled_by: recon.reconciledBy
+                    reconciled_by: recon.reconciledBy,
+                    dealer_sales_amount: recon.dealerSalesAmount,
+                    end_user_sales_volume: recon.endUserSalesVolume,
+                    end_user_sales_amount: recon.endUserSalesAmount,
+                    expected_amount: recon.expectedAmount,
+                    pos_cashless: recon.posCashless,
+                    cash_payments: recon.cashPayments,
+                    parameters: recon.parameters || null
                 }])
                 .select()
                 .single();
@@ -1156,7 +1167,14 @@ export const api = {
                 status: data.status,
                 notes: data.notes,
                 reconciledBy: data.reconciled_by,
-                createdAt: data.created_at
+                createdAt: data.created_at,
+                dealerSalesAmount: Number(data.dealer_sales_amount || 0),
+                endUserSalesVolume: Number(data.end_user_sales_volume || 0),
+                endUserSalesAmount: Number(data.end_user_sales_amount || 0),
+                expectedAmount: Number(data.expected_amount || 0),
+                posCashless: Number(data.pos_cashless || 0),
+                cashPayments: Number(data.cash_payments || 0),
+                parameters: data.parameters || undefined
             };
         },
 
@@ -1176,11 +1194,13 @@ export const api = {
         /**
          * Run daily reconciliation for all inventory items
          * Compares expected volume (opening + receipts - sales - transfers - losses) vs actual
+         * Also computes sales breakdowns by customer type and payment method
          */
         async runDailyReconciliation(
             inventory: InventoryItem[],
             transactions: Transaction[],
-            userName: string
+            userName: string,
+            manualOverrides?: Map<string, { posCashless: number; cashPayments: number }>
         ): Promise<Reconciliation[]> {
             const today = new Date().toISOString().split('T')[0];
             const results: Reconciliation[] = [];
@@ -1193,11 +1213,10 @@ export const api = {
             }
 
             // Fetch all previous reconciliations to determine opening volumes
-            // Optimization: In a larger system, we'd fetch only the latest per product via a specific query
             const { data: allRecons } = await supabase
                 .from('reconciliations')
                 .select('*')
-                .lt('date', today) // Only get past reconciliations
+                .lt('date', today)
                 .order('date', { ascending: false });
 
             // Create a map of latest reconciliation per product-location
@@ -1208,6 +1227,28 @@ export const api = {
                     if (!latestReconMap.has(key)) {
                         latestReconMap.set(key, r);
                     }
+                });
+            }
+
+            // Fetch all customers to build a customerId → type map
+            const { data: allCustomers } = await supabase
+                .from('customers')
+                .select('id, type');
+            const customerTypeMap = new Map<string, string>();
+            if (allCustomers) {
+                allCustomers.forEach((c: any) => {
+                    customerTypeMap.set(c.id, c.type);
+                });
+            }
+
+            // Fetch all prices to build a product+customerType → price map
+            const { data: allPrices } = await supabase
+                .from('prices')
+                .select('product, customer_type, price_per_liter');
+            const priceMap = new Map<string, number>();
+            if (allPrices) {
+                allPrices.forEach((p: any) => {
+                    priceMap.set(`${p.product}-${p.customer_type}`, Number(p.price_per_liter));
                 });
             }
 
@@ -1224,6 +1265,14 @@ export const api = {
                 let receipts = 0;
                 let outflows = 0;
 
+                // Sales breakdown accumulators
+                let dealerSalesAmount = 0;
+                let endUserSalesVolume = 0;
+                let endUserSalesAmount = 0;
+                let posCashless = 0;
+                let cashPayments = 0;
+                let totalSalesVolume = 0;
+
                 itemTransactions.forEach(tx => {
                     if (tx.type === TransactionType.RECEIPT) {
                         receipts += tx.volume;
@@ -1232,10 +1281,39 @@ export const api = {
                         tx.type === TransactionType.LOSS) {
                         outflows += tx.volume;
                     }
+
+                    // Only compute sales breakdowns for SALE transactions
+                    if (tx.type === TransactionType.SALE) {
+                        totalSalesVolume += tx.volume;
+                        const txAmount = tx.totalAmount || 0;
+                        const custType = tx.customerId ? customerTypeMap.get(tx.customerId) : undefined;
+
+                        if (custType === CustomerType.DEALER) {
+                            dealerSalesAmount += txAmount;
+                        } else {
+                            // Default to end-user if no customer or end-user type
+                            endUserSalesVolume += tx.volume;
+                            endUserSalesAmount += txAmount;
+                        }
+
+                        // Payment method breakdown
+                        if (tx.paymentMethod === 'POS') {
+                            posCashless += txAmount;
+                        } else if (tx.paymentMethod === 'CASH') {
+                            cashPayments += txAmount;
+                        }
+                        // TRANSFER or undefined payment methods are not counted in POS/Cash
+                    }
                 });
 
+                // Apply manual overrides for POS/Cash if provided (takes precedence)
+                if (manualOverrides?.has(item.id)) {
+                    const overrides = manualOverrides.get(item.id)!;
+                    posCashless = overrides.posCashless;
+                    cashPayments = overrides.cashPayments;
+                }
+
                 // Determine Opening Volume
-                // 1. Try to get from previous reconciliation (Best source of truth)
                 const key = `${item.location}-${item.product}`;
                 const previousRecon = latestReconMap.get(key);
 
@@ -1244,9 +1322,6 @@ export const api = {
                 if (previousRecon) {
                     openingVolume = Number(previousRecon.actual_volume);
                 } else {
-                    // 2. If no history, back-calculate opening volume from current state
-                    // Opening = Current - Receipts + Outflows
-                    // This assumes the current system state is perfect for Day 1
                     openingVolume = item.currentVolume - receipts + outflows;
                 }
 
@@ -1264,7 +1339,7 @@ export const api = {
                 // Determine status based on variance threshold
                 let status: ReconciliationStatus;
                 const absVariancePercent = Math.abs(variancePercent);
-                if (Math.abs(variance) < 0.01) { // Floating point tolerance
+                if (Math.abs(variance) < 0.01) {
                     status = 'BALANCED';
                 } else if (absVariancePercent <= 0.5) {
                     status = 'BALANCED';
@@ -1273,6 +1348,17 @@ export const api = {
                 } else {
                     status = 'VARIANCE_MAJOR';
                 }
+
+                // Compute expected amount: total sales volume × average price
+                // Use end-user price as the base expected price
+                const endUserPriceKey = `${item.product}-${CustomerType.END_USER}`;
+                const dealerPriceKey = `${item.product}-${CustomerType.DEALER}`;
+                const endUserPrice = priceMap.get(endUserPriceKey) || 0;
+                const dealerPrice = priceMap.get(dealerPriceKey) || 0;
+                // expectedAmount = sum of (each sale's volume × the applicable price)
+                // Simplified: use dealer volume × dealer price + end user volume × end user price
+                const dealerSalesVolume = totalSalesVolume - endUserSalesVolume;
+                const expectedAmount = (dealerSalesVolume * dealerPrice) + (endUserSalesVolume * endUserPrice);
 
                 const recon = await this.create({
                     date: today,
@@ -1285,7 +1371,13 @@ export const api = {
                     variancePercent,
                     status,
                     notes: previousRecon ? undefined : 'Initial reconciliation (system baseline)',
-                    reconciledBy: userName
+                    reconciledBy: userName,
+                    dealerSalesAmount,
+                    endUserSalesVolume,
+                    endUserSalesAmount,
+                    expectedAmount,
+                    posCashless,
+                    cashPayments
                 });
 
                 if (recon) {

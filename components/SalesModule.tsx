@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { InventoryItem, ProductType, CustomerType, Customer, TransactionType, Transaction, UserRole, hasPermission } from '../types';
 import { ShoppingCart, Users, Truck, Check, Plus, X, Phone, Search, DollarSign, Scale, Printer, History, Trash2 } from 'lucide-react';
 import { api } from '../services/api';
-import { previewNextInvoiceNumber, syncInvoiceCounter, getTodayDateString } from '../utils/invoiceGenerator';
+import { getTodayDateString } from '../utils/invoiceGenerator';
 import { printReceipt, createReceiptData } from '../utils/receiptPrinter';
 
 interface SalesModuleProps {
@@ -23,10 +23,13 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
     const [volume, setVolume] = useState<string>('');
     const [amount, setAmount] = useState<string>('');
     const [inputMode, setInputMode] = useState<'volume' | 'amount'>('volume');
-    const [refDoc, setRefDoc] = useState<string>(() => previewNextInvoiceNumber());
+    const [refDoc, setRefDoc] = useState<string>('');
     const [searchQuery, setSearchQuery] = useState('');
     const [showAddCustomer, setShowAddCustomer] = useState(false);
     const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+    // Date Filter State
+    const [dateFilter, setDateFilter] = useState<'recent' | 'today' | 'week' | 'month' | 'year' | 'all'>('recent');
 
     // New customer form
     const [newCustomerName, setNewCustomerName] = useState('');
@@ -35,14 +38,12 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
     useEffect(() => {
         loadCustomers();
 
-        // Sync invoice counter with database to prevent duplicates
+        // Sync invoice preview from counter table
         const syncInvoice = async () => {
             const todayStr = getTodayDateString();
-            const lastRef = await api.transactions.getLastInvoiceNumber(todayStr);
-            if (lastRef) {
-                syncInvoiceCounter(lastRef);
-                setRefDoc(previewNextInvoiceNumber());
-            }
+            const currentSeq = await api.transactions.getCurrentInvoiceSeq(todayStr);
+            const nextSeq = currentSeq + 1;
+            setRefDoc(`INV-${todayStr}-${String(nextSeq).padStart(4, '0')}`);
         };
         syncInvoice();
     }, []);
@@ -110,14 +111,14 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
         setAmount('');
         setSourceId('');
 
-        // Update invoice preview for next sale (sync from DB after a short delay)
+        // Update invoice preview immediately from counter table
+        // Small delay only to allow the insert to complete
         setTimeout(async () => {
-            const lastRef = await api.transactions.getLastInvoiceNumber(todayStr);
-            if (lastRef) {
-                syncInvoiceCounter(lastRef);
-                setRefDoc(previewNextInvoiceNumber());
-            }
-        }, 500);
+            const currentSeq = await api.transactions.getCurrentInvoiceSeq(todayStr);
+            const nextSeq = currentSeq + 1;
+            const nextPreview = `INV-${todayStr}-${String(nextSeq).padStart(4, '0')}`;
+            setRefDoc(nextPreview);
+        }, 200);
     };
 
     const handleAddCustomer = async (e: React.FormEvent) => {
@@ -146,340 +147,328 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
         }
     };
 
+    // Filter sales based on selected date range
+    const getFilteredSales = () => {
+        const sales = transactions.filter(t => t.type === TransactionType.SALE);
+        const now = new Date();
+
+        switch (dateFilter) {
+            case 'today': {
+                const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+                return sales.filter(t => new Date(t.timestamp) >= startOfDay);
+            }
+            case 'week': {
+                // Start of current week (Monday)
+                const d = new Date(now);
+                const day = d.getDay();
+                const diff = d.getDate() - day + (day === 0 ? -6 : 1); // adjust when day is sunday
+                const monday = new Date(d.setDate(diff));
+                monday.setHours(0, 0, 0, 0);
+                return sales.filter(t => new Date(t.timestamp) >= monday);
+            }
+            case 'month': {
+                return sales.filter(t => {
+                    const d = new Date(t.timestamp);
+                    return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+                });
+            }
+            case 'year': {
+                return sales.filter(t => new Date(t.timestamp).getFullYear() === now.getFullYear());
+            }
+            case 'all':
+                return sales;
+            case 'recent':
+            default:
+                return sales.slice(0, 10);
+        }
+    };
+
+    const filteredSales = getFilteredSales();
     const selectedCustomerDetails = customers.find(c => c.id === selectedCustomer);
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Sales Form */}
-            <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-                <div className="flex items-center gap-3 mb-6">
-                    <div className="p-2 bg-indigo-100 rounded-lg">
-                        <ShoppingCart className="w-6 h-6 text-indigo-700" />
-                    </div>
-                    <div>
-                        <h2 className="text-xl font-bold text-slate-800">New Sale</h2>
-                        <p className="text-sm text-slate-500">Process sales for Dealers & End Users</p>
-                    </div>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Customer Type Selection */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <button
-                            type="button"
-                            onClick={() => { setCustomerType(CustomerType.DEALER); setSelectedCustomer(''); setSearchQuery(''); }}
-                            className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all ${customerType === CustomerType.DEALER
-                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                                : 'border-slate-200 hover:border-indigo-300'
-                                }`}
-                        >
-                            <Truck className="w-6 h-6 mb-2" />
-                            <span className="font-semibold">Dealer</span>
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => { setCustomerType(CustomerType.END_USER); setSelectedCustomer(''); setSearchQuery(''); }}
-                            className={`flex flex-col items-center justify-center p-4 rounded-lg border-2 transition-all ${customerType === CustomerType.END_USER
-                                ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                                : 'border-slate-200 hover:border-indigo-300'
-                                }`}
-                        >
-                            <Users className="w-6 h-6 mb-2" />
-                            <span className="font-semibold">End User</span>
-                        </button>
-                    </div>
-
-                    {/* Customer Selection with Autocomplete */}
-                    <div className="relative">
-                        <div className="flex items-center justify-between mb-1">
-                            <label className="block text-sm font-medium text-slate-700">Select Customer</label>
-                            <button
-                                type="button"
-                                onClick={() => setShowAddCustomer(true)}
-                                className="text-xs text-indigo-600 hover:text-indigo-800 flex items-center gap-1"
-                            >
-                                <Plus className="w-3 h-3" />
-                                Add New
-                            </button>
+        <div className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Sales Entry Form */}
+                <div className="lg:col-span-2">
+                    <div className="bg-white rounded-lg shadow-sm border border-slate-200">
+                        <div className="p-4 border-b border-slate-200 flex justify-between items-center">
+                            <div className="flex items-center gap-2">
+                                <ShoppingCart className="w-5 h-5 text-indigo-600" />
+                                <h3 className="font-bold text-slate-700">New Sale Entry</h3>
+                            </div>
+                            <div className="text-sm font-mono bg-slate-100 px-3 py-1 rounded text-slate-600">
+                                {refDoc || 'Generating Invoice...'}
+                            </div>
                         </div>
 
-                        {/* Autocomplete Input */}
-                        <div className="relative">
-                            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                                <Search className="h-4 w-4 text-slate-400" />
-                            </div>
-                            <input
-                                type="text"
-                                value={searchQuery}
-                                onChange={(e) => {
-                                    setSearchQuery(e.target.value);
-                                    setIsDropdownOpen(true);
-                                    if (selectedCustomer) setSelectedCustomer(''); // Reset selection if user types
-                                }}
-                                onFocus={() => setIsDropdownOpen(true)}
-                                onBlur={() => setTimeout(() => setIsDropdownOpen(false), 200)} // Delay to allow click
-                                placeholder={`Search ${customerType}s by name or phone...`}
-                                className="w-full pl-10 pr-10 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 text-sm"
-                            />
-                            {selectedCustomer && (
-                                <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                                    <Check className="h-4 w-4 text-green-500" />
-                                </div>
-                            )}
-
-                            {/* Dropdown Results */}
-                            {isDropdownOpen && (
-                                <div className="absolute z-50 mt-1 w-full bg-white shadow-lg max-h-60 rounded-md py-1 text-base ring-1 ring-black ring-opacity-5 overflow-auto focus:outline-none sm:text-sm">
-                                    {isLoadingCustomers ? (
-                                        <div className="cursor-default select-none relative py-2 px-4 text-slate-500">
-                                            Loading...
-                                        </div>
-                                    ) : availableCustomers.length === 0 ? (
-                                        <div className="cursor-default select-none relative py-2 px-4 text-slate-500">
-                                            No {customerType}s found matching "{searchQuery}"
-                                        </div>
-                                    ) : (
-                                        availableCustomers.slice(0, 50).map((c) => (
-                                            <div
-                                                key={c.id}
-                                                className="cursor-pointer select-none relative py-2 pl-3 pr-9 hover:bg-slate-50"
-                                                onMouseDown={(e) => {
-                                                    e.preventDefault(); // Prevent blur
-                                                    setSelectedCustomer(c.id);
-                                                    setSearchQuery(c.name);
-                                                    setIsDropdownOpen(false);
-                                                }}
+                        <div className="p-6">
+                            <form onSubmit={handleSubmit} className="space-y-5">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                                    {/* Customer Selection */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Customer</label>
+                                        <div className="flex gap-2 mb-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => { setCustomerType(CustomerType.DEALER); setSelectedCustomer(''); }}
+                                                className={`flex-1 py-1.5 text-xs font-medium rounded border ${customerType === CustomerType.DEALER ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'}`}
                                             >
-                                                <div className="flex items-center">
-                                                    <span className="font-normal block truncate">
-                                                        {c.name}
-                                                    </span>
-                                                    {c.contactInfo?.phone && (
-                                                        <span className="ml-2 text-slate-400 text-xs truncate">
-                                                            {c.contactInfo.phone}
-                                                        </span>
+                                                Dealer
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() => { setCustomerType(CustomerType.END_USER); setSelectedCustomer(''); }}
+                                                className={`flex-1 py-1.5 text-xs font-medium rounded border ${customerType === CustomerType.END_USER ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-600'}`}
+                                            >
+                                                End User
+                                            </button>
+                                        </div>
+
+                                        <div className="relative">
+                                            <div
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-md flex items-center justify-between cursor-pointer bg-white"
+                                                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                                            >
+                                                <span className={selectedCustomer ? 'text-slate-900' : 'text-slate-400'}>
+                                                    {selectedCustomer
+                                                        ? customers.find(c => c.id === selectedCustomer)?.name
+                                                        : 'Select Customer...'}
+                                                </span>
+                                                <Search className="w-4 h-4 text-slate-400" />
+                                            </div>
+
+                                            {isDropdownOpen && (
+                                                <div className="absolute z-10 w-full mt-1 bg-white border border-slate-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                                                    <div className="p-2 sticky top-0 bg-white border-b border-slate-100">
+                                                        <input
+                                                            type="text"
+                                                            placeholder="Search customers..."
+                                                            className="w-full px-2 py-1 text-sm border border-slate-200 rounded focus:outline-none focus:border-indigo-500"
+                                                            value={searchQuery}
+                                                            onChange={(e) => setSearchQuery(e.target.value)}
+                                                            autoFocus
+                                                        />
+                                                    </div>
+
+                                                    {isLoadingCustomers ? (
+                                                        <div className="p-4 text-center text-xs text-slate-400">Loading...</div>
+                                                    ) : availableCustomers.length === 0 ? (
+                                                        <div className="p-4 text-center text-xs text-slate-500">
+                                                            No customers found.
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => { setShowAddCustomer(true); setIsDropdownOpen(false); }}
+                                                                className="text-indigo-600 hover:text-indigo-800 ml-1 font-medium"
+                                                            >
+                                                                Add New?
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        availableCustomers.map(customer => (
+                                                            <div
+                                                                key={customer.id}
+                                                                className={`px-3 py-2 text-sm cursor-pointer hover:bg-slate-50 flex justify-between items-center ${selectedCustomer === customer.id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700'}`}
+                                                                onClick={() => {
+                                                                    setSelectedCustomer(customer.id);
+                                                                    setIsDropdownOpen(false);
+                                                                    setSearchQuery('');
+                                                                }}
+                                                            >
+                                                                <span>{customer.name}</span>
+                                                                {customer.contactInfo?.phone && (
+                                                                    <span className="text-xs text-slate-400">{customer.contactInfo.phone}</span>
+                                                                )}
+                                                            </div>
+                                                        ))
                                                     )}
                                                 </div>
-                                                {selectedCustomer === c.id && (
-                                                    <span className="text-indigo-600 absolute inset-y-0 right-0 flex items-center pr-4">
-                                                        <Check className="h-4 w-4" />
-                                                    </span>
-                                                )}
-                                            </div>
-                                        ))
-                                    )}
-                                    {availableCustomers.length > 50 && (
-                                        <div className="py-2 px-4 text-xs text-center text-slate-400 bg-slate-50 border-t border-slate-100">
-                                            Showing top 50 of {availableCustomers.length} matches. Keep typing to narrow down.
+                                            )}
                                         </div>
-                                    )}
-                                </div>
-                            )}
-                        </div>
-
-                        {/* Selected Customer Details */}
-                        {selectedCustomerDetails && (
-                            <div className="mt-2 p-2 bg-slate-50 rounded border border-slate-200 text-sm">
-                                <div className="flex items-center gap-2 text-slate-600">
-                                    <Phone className="w-4 h-4" />
-                                    <span>{selectedCustomerDetails.contactInfo?.phone || 'No phone'}</span>
-                                </div>
-                                {selectedCustomerDetails.contactInfo?.email && (
-                                    <div className="text-xs text-slate-500 mt-1">
-                                        Email: {selectedCustomerDetails.contactInfo.email}
                                     </div>
-                                )}
-                            </div>
-                        )}
-                    </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Product</label>
-                            <select
-                                value={product}
-                                onChange={(e) => { setProduct(e.target.value as ProductType); setSourceId(''); }}
-                                className="w-full px-3 py-2 border border-slate-300 rounded-md"
-                            >
-                                {Object.values(ProductType).map(p => (
-                                    <option key={p} value={p}>{p}</option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Source Tank</label>
-                            {inventory.length === 0 ? (
-                                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
-                                    <p className="font-medium">No tanks configured.</p>
-                                    <p className="text-xs mt-1">Go to <strong>Tank Management</strong> to specific tanks first.</p>
-                                </div>
-                            ) : availableInventory.length === 0 ? (
-                                <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
-                                    No active tanks with <strong>{product}</strong> stock available.
-                                </div>
-                            ) : (
-                                <select
-                                    value={sourceId}
-                                    onChange={(e) => setSourceId(e.target.value)}
-                                    required
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500"
-                                >
-                                    <option value="">-- Select Source --</option>
-                                    {availableInventory.map(item => (
-                                        <option
-                                            key={item.id}
-                                            value={item.id}
-                                            disabled={item.currentVolume <= 0}
-                                            className={item.currentVolume <= 0 ? 'text-slate-400 bg-slate-50' : ''}
+                                    {/* Product Selection */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Product</label>
+                                        <select
+                                            value={product}
+                                            onChange={(e) => {
+                                                setProduct(e.target.value as ProductType);
+                                                setSourceId('');
+                                            }}
+                                            className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
                                         >
-                                            {item.location} ({item.currentVolume.toLocaleString()} L)
-                                            {item.currentVolume <= 0 ? ' - Empty' : ''}
-                                        </option>
-                                    ))}
-                                </select>
-                            )}
-                        </div>
-                    </div>
+                                            {Object.values(ProductType).map(p => (
+                                                <option key={p} value={p}>{p}</option>
+                                            ))}
+                                        </select>
+                                    </div>
 
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Input Mode</label>
-                            <div className="grid grid-cols-2 gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => { setInputMode('volume'); setAmount(''); }}
-                                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 transition-all text-sm ${inputMode === 'volume'
-                                        ? 'border-indigo-600 bg-indigo-50 text-indigo-700'
-                                        : 'border-slate-200 hover:border-indigo-300'
-                                        }`}
-                                >
-                                    <Scale className="w-4 h-4" />
-                                    By Volume
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => { setInputMode('amount'); setVolume(''); }}
-                                    className={`flex items-center justify-center gap-2 px-3 py-2 rounded-lg border-2 transition-all text-sm ${inputMode === 'amount'
-                                        ? 'border-green-600 bg-green-50 text-green-700'
-                                        : 'border-slate-200 hover:border-green-300'
-                                        }`}
-                                >
-                                    <DollarSign className="w-4 h-4" />
-                                    By Amount
-                                </button>
-                            </div>
-                        </div>
-                        <div>
-                            {inputMode === 'volume' ? (
-                                <>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Volume (Liters)</label>
-                                    <input
-                                        type="number"
-                                        value={volume}
-                                        onChange={(e) => setVolume(e.target.value)}
-                                        required
-                                        min="1"
-                                        step="0.01"
-                                        placeholder="0.00"
-                                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500"
-                                    />
-                                </>
-                            ) : (
-                                <>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Amount (₦)</label>
-                                    <input
-                                        type="number"
-                                        value={amount}
-                                        onChange={(e) => setAmount(e.target.value)}
-                                        required
-                                        min="1"
-                                        step="0.01"
-                                        placeholder="0.00"
-                                        className="w-full px-3 py-2 border border-green-300 rounded-md focus:ring-green-500 bg-green-50"
-                                    />
-                                </>
-                            )}
-                        </div>
-                    </div>
+                                    {/* Source Tank */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Source Tank</label>
+                                        {inventory.length === 0 ? (
+                                            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-amber-800 text-sm">
+                                                <p className="font-medium">No tanks configured.</p>
+                                                <p className="text-xs mt-1">Go to <strong>Tank Management</strong> to specific tanks first.</p>
+                                            </div>
+                                        ) : availableInventory.length === 0 ? (
+                                            <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
+                                                No active tanks with <strong>{product}</strong> stock available.
+                                            </div>
+                                        ) : (
+                                            <select
+                                                value={sourceId}
+                                                onChange={(e) => setSourceId(e.target.value)}
+                                                required
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500"
+                                            >
+                                                <option value="">-- Select Source --</option>
+                                                {availableInventory.map(item => (
+                                                    <option
+                                                        key={item.id}
+                                                        value={item.id}
+                                                        disabled={item.currentVolume <= 0}
+                                                        className={item.currentVolume <= 0 ? 'text-slate-400 bg-slate-50' : ''}
+                                                    >
+                                                        {item.location} ({item.currentVolume.toLocaleString()} L)
+                                                        {item.currentVolume <= 0 ? ' - Empty' : ''}
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        )}
+                                    </div>
 
-                    {/* Summary Row */}
-                    <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
-                        <div className="grid grid-cols-3 gap-4 text-center">
-                            <div>
-                                <div className="text-xs text-slate-500 uppercase font-medium">Rate</div>
-                                <div className="text-lg font-bold text-slate-700">₦{currentPrice.toLocaleString()}/L</div>
-                            </div>
-                            <div>
-                                <div className="text-xs text-slate-500 uppercase font-medium">Volume</div>
-                                <div className={`text-lg font-bold ${inputMode === 'volume' ? 'text-indigo-600' : 'text-slate-700'}`}>
-                                    {inputMode === 'volume'
-                                        ? (Number(volume) || 0).toLocaleString()
-                                        : calculatedVolume.toFixed(2)} L
+                                    {/* Volume/Amount Input */}
+                                    <div>
+                                        <div className="flex justify-between mb-1">
+                                            <label className="block text-sm font-medium text-slate-700">Quantity</label>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setInputMode('volume'); setAmount(''); }}
+                                                    className={`text-xs px-2 py-0.5 rounded ${inputMode === 'volume' ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-slate-500 hover:bg-slate-100'}`}
+                                                >
+                                                    By Liters
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => { setInputMode('amount'); setVolume(''); }}
+                                                    className={`text-xs px-2 py-0.5 rounded ${inputMode === 'amount' ? 'bg-indigo-100 text-indigo-700 font-medium' : 'text-slate-500 hover:bg-slate-100'}`}
+                                                >
+                                                    By Amount
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                required
+                                                value={inputMode === 'volume' ? volume : amount}
+                                                onChange={(e) => inputMode === 'volume' ? setVolume(e.target.value) : setAmount(e.target.value)}
+                                                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-indigo-500 focus:border-indigo-500 pl-8"
+                                                placeholder={inputMode === 'volume' ? "0.00" : "0.00"}
+                                            />
+                                            <div className="absolute left-3 top-2.5 text-slate-400">
+                                                {inputMode === 'volume' ? <Scale className="w-4 h-4" /> : <span className="text-xs font-bold">₦</span>}
+                                            </div>
+                                            <div className="absolute right-3 top-2.5 text-xs text-slate-400 font-mono">
+                                                {inputMode === 'volume'
+                                                    ? `≈ ₦${(Number(volume || 0) * currentPrice).toLocaleString()}`
+                                                    : `≈ ${(Number(amount || 0) / (currentPrice || 1)).toLocaleString(undefined, { maximumFractionDigits: 2 })} L`
+                                                }
+                                            </div>
+                                        </div>
+                                        <p className="text-xs text-slate-500 mt-1">
+                                            Current Rate: <span className="font-mono font-medium text-slate-700">₦{currentPrice}/L</span>
+                                        </p>
+                                    </div>
                                 </div>
-                            </div>
-                            <div>
-                                <div className="text-xs text-slate-500 uppercase font-medium">Total</div>
-                                <div className={`text-lg font-bold ${inputMode === 'amount' ? 'text-green-600' : 'text-slate-700'}`}>
-                                    ₦{totalAmount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+
+                                {/* Summary Row */}
+                                <div className="p-4 bg-slate-50 rounded-lg border border-slate-200">
+                                    <div className="grid grid-cols-3 gap-4 text-center">
+                                        <div>
+                                            <div className="text-xs text-slate-500 uppercase font-medium">Rate</div>
+                                            <div className="text-lg font-bold text-slate-700">₦{currentPrice.toLocaleString()}/L</div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-slate-500 uppercase font-medium">Volume</div>
+                                            <div className={`text-lg font-bold ${inputMode === 'volume' ? 'text-indigo-600' : 'text-slate-700'}`}>
+                                                {inputMode === 'volume'
+                                                    ? (Number(volume) || 0).toLocaleString()
+                                                    : calculatedVolume.toFixed(2)} L
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <div className="text-xs text-slate-500 uppercase font-medium">Total</div>
+                                            <div className={`text-lg font-bold ${inputMode === 'amount' ? 'text-green-600' : 'text-slate-700'}`}>
+                                                ₦{totalAmount.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
-                            </div>
+
+                                <div className="pt-2 border-t border-slate-100 flex justify-end">
+                                    <button
+                                        type="submit"
+                                        disabled={!selectedCustomer || !sourceId || (!volume && !amount)}
+                                        className="px-6 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 font-semibold disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                    >
+                                        <Check className="w-4 h-4" />
+                                        Complete Sale
+                                    </button>
+                                </div>
+                            </form>
                         </div>
                     </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Invoice # (Auto-generated)</label>
-                        <input
-                            type="text"
-                            readOnly
-                            value={refDoc}
-                            className="w-full px-3 py-2 border border-slate-200 rounded-md bg-slate-50 text-slate-700 font-mono cursor-not-allowed"
-                        />
-                        <p className="text-xs text-slate-400 mt-1">Invoice number is auto-generated with today's date</p>
-                    </div>
-
-                    <button
-                        type="submit"
-                        className="w-full py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-semibold flex items-center justify-center gap-2"
-                    >
-                        <Check className="w-5 h-5" />
-                        Process Sale
-                    </button>
-                </form>
-            </div>
-
-            {/* Summary / Info Panel */}
-            <div className="space-y-6">
-                <div className="bg-indigo-900 text-white p-6 rounded-lg shadow-sm">
-                    <h3 className="text-lg font-bold mb-4">Sales Policy Guidelines</h3>
-                    <ul className="space-y-3 text-indigo-100 text-sm">
-                        <li className="flex gap-2">
-                            <span className="text-indigo-400">•</span>
-                            Dealers must have a valid lifting license for the current year.
-                        </li>
-                        <li className="flex gap-2">
-                            <span className="text-indigo-400">•</span>
-                            End Users require signed strict liability agreements for volume &gt; 10,000L.
-                        </li>
-                        <li className="flex gap-2">
-                            <span className="text-indigo-400">•</span>
-                            All PMS sales are subject to current DPR price caps.
-                        </li>
-                    </ul>
                 </div>
 
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-slate-200">
-                    <h3 className="font-bold text-slate-700 mb-3">Customer Summary</h3>
-                    <div className="grid grid-cols-2 gap-4">
-                        <div className="p-3 bg-amber-50 rounded border border-amber-100">
-                            <div className="text-xs text-amber-600 font-medium uppercase">Dealers</div>
-                            <div className="text-2xl font-bold text-amber-700">
-                                {customers.filter(c => c.type === CustomerType.DEALER).length}
-                            </div>
+                {/* Quick Stats Sidebar */}
+                <div className="space-y-6">
+                    <div className="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+                        <h4 className="font-medium text-slate-700 mb-4 flex items-center gap-2">
+                            <Truck className="w-4 h-4" />
+                            Active Products
+                        </h4>
+                        <div className="space-y-3">
+                            {inventory.map(item => (
+                                <div key={item.id} className="group">
+                                    <div className="flex justify-between text-sm mb-1">
+                                        <span className="text-slate-600">{item.product.split(' ')[0]}</span>
+                                        <span className="font-mono text-slate-800">{item.currentVolume.toLocaleString()}L</span>
+                                    </div>
+                                    <div className="w-full bg-slate-100 rounded-full h-1.5 overflow-hidden">
+                                        <div
+                                            className={`h-full rounded-full ${item.currentVolume < item.minThreshold ? 'bg-red-500' : 'bg-green-500'
+                                                }`}
+                                            style={{ width: `${Math.min((item.currentVolume / item.maxCapacity) * 100, 100)}%` }}
+                                        />
+                                    </div>
+                                </div>
+                            ))}
                         </div>
-                        <div className="p-3 bg-blue-50 rounded border border-blue-100">
-                            <div className="text-xs text-blue-600 font-medium uppercase">End Users</div>
-                            <div className="text-2xl font-bold text-blue-700">
-                                {customers.filter(c => c.type === CustomerType.END_USER).length}
+                    </div>
+
+                    <div className="bg-white p-5 rounded-lg shadow-sm border border-slate-200">
+                        <h4 className="font-medium text-slate-700 mb-4 flex items-center gap-2">
+                            <Users className="w-4 h-4" />
+                            Customer Overview
+                        </h4>
+                        <div className="grid grid-cols-2 gap-4">
+                            <div className="bg-slate-50 p-3 rounded-lg text-center">
+                                <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">Dealers</div>
+                                <div className="text-2xl font-bold text-slate-800">
+                                    {customers.filter(c => c.type === CustomerType.DEALER).length}
+                                </div>
+                            </div>
+                            <div className="bg-slate-50 p-3 rounded-lg text-center">
+                                <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">End Users</div>
+                                <div className="text-2xl font-bold text-slate-800">
+                                    {customers.filter(c => c.type === CustomerType.END_USER).length}
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -489,10 +478,25 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
             {/* Recent Sales History */}
             <div className="lg:col-span-2 mt-8">
                 <div className="bg-white rounded-lg shadow-sm border border-slate-200">
-                    <div className="p-4 border-b border-slate-200 flex justify-between items-center">
+                    <div className="p-4 border-b border-slate-200 flex flex-col sm:flex-row justify-between items-center gap-4">
                         <div className="flex items-center gap-2">
                             <History className="w-5 h-5 text-slate-500" />
-                            <h3 className="font-bold text-slate-700">Recent Sales History</h3>
+                            <h3 className="font-bold text-slate-700">Sales History</h3>
+                        </div>
+
+                        <div className="flex bg-slate-100 p-1 rounded-lg">
+                            {(['recent', 'today', 'week', 'month', 'year', 'all'] as const).map(filter => (
+                                <button
+                                    key={filter}
+                                    onClick={() => setDateFilter(filter)}
+                                    className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${dateFilter === filter
+                                            ? 'bg-white text-indigo-700 shadow-sm'
+                                            : 'text-slate-500 hover:text-slate-700 hover:bg-slate-200/50'
+                                        }`}
+                                >
+                                    {filter.charAt(0).toUpperCase() + filter.slice(1)}
+                                </button>
+                            ))}
                         </div>
                     </div>
                     <div className="overflow-x-auto">
@@ -509,66 +513,63 @@ export const SalesModule: React.FC<SalesModuleProps> = ({ inventory, transaction
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-100">
-                                {transactions
-                                    .filter(t => t.type === TransactionType.SALE)
-                                    .slice(0, 10) // Show last 10 sales
-                                    .map(tx => (
-                                        <tr key={tx.id} className="hover:bg-slate-50">
-                                            <td className="px-4 py-3 text-slate-600">
-                                                {new Date(tx.timestamp).toLocaleString()}
-                                            </td>
-                                            <td className="px-4 py-3 font-mono text-slate-500">
-                                                {tx.referenceDoc}
-                                            </td>
-                                            <td className="px-4 py-3 font-medium text-slate-800">
-                                                {tx.customerName || 'Unknown'}
-                                            </td>
-                                            <td className="px-4 py-3 text-slate-600">
-                                                {tx.product}
-                                            </td>
-                                            <td className="px-4 py-3 text-slate-600">
-                                                {tx.volume.toLocaleString()} L
-                                            </td>
-                                            <td className="px-4 py-3">
-                                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${tx.status === 'APPROVED' ? 'bg-green-100 text-green-800' :
-                                                    tx.status === 'PENDING' ? 'bg-amber-100 text-amber-800' :
-                                                        'bg-red-100 text-red-800'
-                                                    }`}>
-                                                    {tx.status}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-3 text-right">
-                                                <div className="flex items-center justify-end gap-2">
+                                {filteredSales.map(tx => (
+                                    <tr key={tx.id} className="hover:bg-slate-50">
+                                        <td className="px-4 py-3 text-slate-600">
+                                            {new Date(tx.timestamp).toLocaleString()}
+                                        </td>
+                                        <td className="px-4 py-3 font-mono text-slate-500">
+                                            {tx.referenceDoc}
+                                        </td>
+                                        <td className="px-4 py-3 font-medium text-slate-800">
+                                            {tx.customerName || 'Unknown'}
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-600">
+                                            {tx.product}
+                                        </td>
+                                        <td className="px-4 py-3 text-slate-600">
+                                            {tx.volume.toLocaleString()} L
+                                        </td>
+                                        <td className="px-4 py-3">
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${tx.status === 'APPROVED' ? 'bg-green-100 text-green-800' :
+                                                tx.status === 'PENDING' ? 'bg-amber-100 text-amber-800' :
+                                                    'bg-red-100 text-red-800'
+                                                }`}>
+                                                {tx.status}
+                                            </span>
+                                        </td>
+                                        <td className="px-4 py-3 text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <button
+                                                    onClick={() => printReceipt(createReceiptData({
+                                                        ...tx,
+                                                        sourceId: tx.source,
+                                                        refDoc: tx.referenceDoc
+                                                    }, inventory))}
+                                                    className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-xs font-medium transition-colors"
+                                                    title="Reprint Receipt"
+                                                >
+                                                    <Printer className="w-3 h-3" />
+                                                    Reprint
+                                                </button>
+                                                {userRole && hasPermission(userRole, 'delete_transactions') && onDeleteTransaction && (
                                                     <button
-                                                        onClick={() => printReceipt(createReceiptData({
-                                                            ...tx,
-                                                            sourceId: tx.source,
-                                                            refDoc: tx.referenceDoc
-                                                        }, inventory))}
-                                                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 text-xs font-medium transition-colors"
-                                                        title="Reprint Receipt"
+                                                        onClick={() => onDeleteTransaction(tx.id)}
+                                                        className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs font-medium transition-colors"
+                                                        title="Delete Transaction"
                                                     >
-                                                        <Printer className="w-3 h-3" />
-                                                        Reprint
+                                                        <Trash2 className="w-3 h-3" />
+                                                        Delete
                                                     </button>
-                                                    {userRole && hasPermission(userRole, 'delete_transactions') && onDeleteTransaction && (
-                                                        <button
-                                                            onClick={() => onDeleteTransaction(tx.id)}
-                                                            className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100 text-xs font-medium transition-colors"
-                                                            title="Delete Transaction"
-                                                        >
-                                                            <Trash2 className="w-3 h-3" />
-                                                            Delete
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                {transactions.filter(t => t.type === TransactionType.SALE).length === 0 && (
+                                                )}
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                                {filteredSales.length === 0 && (
                                     <tr>
                                         <td colSpan={7} className="px-4 py-8 text-center text-slate-400 italic">
-                                            No recent sales found.
+                                            No sales found for the selected period.
                                         </td>
                                     </tr>
                                 )}
