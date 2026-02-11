@@ -294,7 +294,7 @@ export const api = {
         },
 
         async getAll(): Promise<AuditLogEntry[]> {
-            const { data, error } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false });
+            const { data, error } = await supabase.from('audit_logs').select('*').order('created_at', { ascending: false }).limit(100); // Limit to 100 for safety if called directly
             if (error || !data) return [];
             return data.map((l: any) => ({
                 id: l.id,
@@ -305,6 +305,38 @@ export const api = {
                 role: l.user_role as UserRole,
                 ipHash: l.ip_hash
             }));
+        },
+
+        async getLogs(date: string, page: number = 1, limit: number = 50): Promise<{ data: AuditLogEntry[], count: number }> {
+            const startOfDay = `${date}T00:00:00.000Z`;
+            const endOfDay = `${date}T23:59:59.999Z`;
+            const from = (page - 1) * limit;
+            const to = from + limit - 1;
+
+            const { data, error, count } = await supabase
+                .from('audit_logs')
+                .select('*', { count: 'exact' })
+                .gte('created_at', startOfDay)
+                .lte('created_at', endOfDay)
+                .order('created_at', { ascending: false })
+                .range(from, to);
+
+            if (error) {
+                console.error('Error fetching paginated audit logs:', error);
+                return { data: [], count: 0 };
+            }
+
+            const logs = (data || []).map((l: any) => ({
+                id: l.id,
+                timestamp: l.created_at,
+                action: l.action,
+                details: l.details,
+                user: l.user_id,
+                role: l.user_role as UserRole,
+                ipHash: l.ip_hash
+            }));
+
+            return { data: logs, count: count || 0 };
         }
     },
 

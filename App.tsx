@@ -52,7 +52,6 @@ function App() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [inventory, setInventory] = useState<InventoryItem[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   // Load Data on Mount and Tab Change with Offline Support
@@ -74,24 +73,19 @@ function App() {
           offlineManager.cacheData('inventory', invData);
           offlineManager.cacheData('transactions', txData);
 
-          // Also fetch audit logs separately
-          api.audit.getAll()
-            .then(auditData => {
-              setAuditLogs(auditData);
-              offlineManager.cacheData('auditLogs', auditData);
-            })
-            .catch(console.error);
+          // Also fetch audit logs separately - REMOVED for pagination per new requirement
+          // api.audit.getAll() ...
 
         } else {
           // Offline: Use cached data
           console.log('Loading cached data for offline use');
           const cachedInventory = offlineManager.getCachedData('inventory');
           const cachedTransactions = offlineManager.getCachedData('transactions');
-          const cachedAuditLogs = offlineManager.getCachedData('auditLogs');
+          // const cachedAuditLogs = offlineManager.getCachedData('auditLogs');
 
           setInventory(cachedInventory);
           setTransactions(cachedTransactions);
-          setAuditLogs(cachedAuditLogs);
+          // setAuditLogs(cachedAuditLogs);
         }
       } catch (error) {
         console.error('Failed to load data:', error);
@@ -105,7 +99,7 @@ function App() {
           console.log('Using cached data due to network error');
           setInventory(cachedInventory);
           setTransactions(cachedTransactions);
-          setAuditLogs(cachedAuditLogs);
+          // setAuditLogs(cachedAuditLogs);
         }
       }
       setIsLoading(false);
@@ -170,21 +164,10 @@ function App() {
     );
   };
 
-  const getFilteredLogs = () => {
-    if (!currentUser) return [];
 
-    // Super Admin, Admin, and Accountant see all logs
-    if (currentUser.role === UserRole.SUPER_ADMIN ||
-      currentUser.role === UserRole.ADMIN ||
-      currentUser.role === UserRole.ACCOUNTANT) {
-      return auditLogs;
-    }
 
-    return auditLogs.filter(log =>
-      log.user === currentUser.name ||
-      log.details.includes(currentUser.location)
-    );
-  };
+  // Removed getFilteredLogs since AuditView handles its own fetching
+  // const getFilteredLogs = () => { ... }
 
   const getFilteredTransactions = () => {
     if (!currentUser) return [];
@@ -214,17 +197,7 @@ function App() {
   const addAuditLog = (action: string, details: string) => {
     if (!currentUser) return;
     api.audit.log(action, details, currentUser.name, currentUser.role);
-    // Optimistic update for UI
-    const newLog: AuditLogEntry = {
-      id: `temp-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      action,
-      details,
-      user: currentUser.name,
-      role: currentUser.role,
-      ipHash: '...'
-    };
-    setAuditLogs(prev => [newLog, ...prev]);
+    // Optimistic update removed as AuditView fetches its own data
   };
 
   const updateInventoryState = async (tx: Transaction) => {
@@ -415,7 +388,6 @@ function App() {
   // Define contents based on active tab
   const renderContent = () => {
     const visibleInventory = getFilteredInventory();
-    const visibleLogs = getFilteredLogs();
     const visibleTransactions = getFilteredTransactions();
 
     switch (activeTab) {
@@ -424,7 +396,7 @@ function App() {
           <RoleDashboard
             user={currentUser}
             inventory={visibleInventory}
-            auditLogs={visibleLogs}
+            auditLogs={[]} // Dashboard might still need recent logs, but for now passing empty or we can add a 'recent logs' fetch in Dashboard
             transactions={visibleTransactions}
             complianceRules={COMPLIANCE_RULES}
             onCommitTransaction={handleTransactionCommit}
@@ -446,7 +418,7 @@ function App() {
           </div>
         );
       case 'audit':
-        return <AuditView logs={visibleLogs} />;
+        return <AuditView />; // No props needed, fetches its own data
       case 'sales':
         return <SalesModule inventory={visibleInventory} transactions={visibleTransactions} onCommitTransaction={handleTransactionCommit} onDeleteTransaction={handleTransactionDelete} userRole={currentUser.role} />;
       case 'customers':
