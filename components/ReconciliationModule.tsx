@@ -15,7 +15,9 @@ import {
     Download,
     MessageSquare,
     Edit2,
-    X
+    X,
+    Check,
+    Ban
 } from 'lucide-react';
 import { api } from '../services/api';
 import { Reconciliation, InventoryItem, Transaction, UserRole, ReconciliationStatus, TransactionType } from '../types';
@@ -214,6 +216,72 @@ export const ReconciliationModule: React.FC<ReconciliationModuleProps> = ({
         userRole === UserRole.ADMIN ||
         userRole === UserRole.MANAGER;
 
+    const canApproveReconciliation =
+        userRole === UserRole.SUPER_ADMIN ||
+        userRole === UserRole.ADMIN ||
+        userRole === UserRole.ACCOUNTANT;
+
+    const handleApprove = async (id: string) => {
+        if (!confirm('Are you sure you want to approve this reconciliation?')) return;
+        try {
+            const success = await api.reconciliations.approve(id, userName);
+            if (success) {
+                setReconciliations(prev => prev.map(r =>
+                    r.id === id
+                        ? { ...r, approvalStatus: 'APPROVED', approvedBy: userName, approvedAt: new Date().toISOString() }
+                        : r
+                ));
+                onAuditLog?.('RECONCILIATION_APPROVE', `Approved reconciliation: ${id}`);
+            }
+        } catch (error) {
+            console.error('Error approving:', error);
+            alert('Failed to approve');
+        }
+    };
+
+    const handleReject = async (id: string) => {
+        const reason = prompt('Please enter a reason for rejection:');
+        if (reason === null) return; // Cancelled
+        if (!reason.trim()) {
+            alert('Rejection reason is required.');
+            return;
+        }
+
+        try {
+            const success = await api.reconciliations.reject(id, reason);
+            if (success) {
+                setReconciliations(prev => prev.map(r =>
+                    r.id === id
+                        ? { ...r, approvalStatus: 'REJECTED', rejectionReason: reason, approvedBy: undefined, approvedAt: undefined }
+                        : r
+                ));
+                onAuditLog?.('RECONCILIATION_REJECT', `Rejected reconciliation: ${id}. Reason: ${reason}`);
+            }
+        } catch (error) {
+            console.error('Error rejecting:', error);
+            alert('Failed to reject');
+        }
+    };
+
+    const handleApproveAll = async () => {
+        const pending = reconciliations.filter(r => r.approvalStatus === 'PENDING');
+        if (pending.length === 0) return;
+        if (!confirm(`Approve all ${pending.length} pending records?`)) return;
+
+        try {
+            // Sequential for now to avoid race conditions/complexity, could be parallelized or bulk API
+            for (const r of pending) {
+                await api.reconciliations.approve(r.id, userName);
+            }
+            // Reload to get fresh state
+            await loadData();
+            onAuditLog?.('RECONCILIATION_APPROVE_ALL', `Bulk approved ${pending.length} records`);
+        } catch (error) {
+            console.error('Error bulk approving:', error);
+            alert('Failed to approve all records');
+        }
+    };
+
     const today = new Date().toISOString().split('T')[0];
     const isToday = selectedDate === today;
 
@@ -336,6 +404,16 @@ export const ReconciliationModule: React.FC<ReconciliationModuleProps> = ({
                                     <span>Manual Reconciliation</span>
                                 </button>
                             )}
+
+                            {canApproveReconciliation && reconciliations.some(r => r.approvalStatus === 'PENDING') && (
+                                <button
+                                    onClick={handleApproveAll}
+                                    className="flex items-center space-x-2 px-5 py-2.5 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium shadow-sm"
+                                >
+                                    <Check className="w-4 h-4" />
+                                    <span>Approve All</span>
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -399,7 +477,8 @@ export const ReconciliationModule: React.FC<ReconciliationModuleProps> = ({
                                         <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Cash Payments</th>
                                         <th className="px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider">Payment Balance</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Parameters</th>
-                                        <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Status</th>
+                                        <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Variance Status</th>
+                                        <th className="px-6 py-3 text-center text-xs font-medium text-slate-500 uppercase tracking-wider">Approval</th>
                                         <th className="px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider">Notes</th>
                                     </tr>
                                 </thead>
@@ -477,6 +556,42 @@ export const ReconciliationModule: React.FC<ReconciliationModuleProps> = ({
                                                     {getStatusIcon(recon.status)}
                                                     <span>{recon.status.replace('_', ' ')}</span>
                                                 </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-center">
+                                                <div className="flex flex-col items-center space-y-2">
+                                                    {recon.approvalStatus === 'PENDING' ? (
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+                                                            Pending
+                                                        </span>
+                                                    ) : recon.approvalStatus === 'APPROVED' ? (
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800" title={`Approved by ${recon.approvedBy} at ${new Date(recon.approvedAt!).toLocaleString()}`}>
+                                                            Approved
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800" title={`Rejected: ${recon.rejectionReason}`}>
+                                                            Rejected
+                                                        </span>
+                                                    )}
+
+                                                    {canApproveReconciliation && recon.approvalStatus === 'PENDING' && (
+                                                        <div className="flex items-center space-x-2">
+                                                            <button
+                                                                onClick={() => handleApprove(recon.id)}
+                                                                className="p-1 hover:bg-green-100 text-green-600 rounded-full transition-colors"
+                                                                title="Approve"
+                                                            >
+                                                                <Check className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                                onClick={() => handleReject(recon.id)}
+                                                                className="p-1 hover:bg-red-100 text-red-600 rounded-full transition-colors"
+                                                                title="Reject"
+                                                            >
+                                                                <X className="w-4 h-4" />
+                                                            </button>
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 {editingNotes === recon.id ? (

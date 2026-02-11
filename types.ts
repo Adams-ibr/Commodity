@@ -180,4 +180,8 @@ export interface Reconciliation {
   posCashless: number;            // ₦ received via POS
   cashPayments: number;           // ₦ received as cash
   parameters?: string;            // Additional reconciliation flags/notes
+  approvalStatus: 'PENDING' | 'APPROVED' | 'REJECTED';
+  approvedBy?: string;
+  approvedAt?: string;
+  rejectionReason?: string;
 }

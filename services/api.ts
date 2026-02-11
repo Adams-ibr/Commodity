@@ -1083,7 +1083,11 @@ export const api = {
                 expectedAmount: Number(r.expected_amount || 0),
                 posCashless: Number(r.pos_cashless || 0),
                 cashPayments: Number(r.cash_payments || 0),
-                parameters: r.parameters || undefined
+                parameters: r.parameters || undefined,
+                approvalStatus: r.approval_status || 'PENDING',
+                approvedBy: r.approved_by,
+                approvedAt: r.approved_at,
+                rejectionReason: r.rejection_reason
             }));
         },
 
@@ -1119,7 +1123,11 @@ export const api = {
                 expectedAmount: Number(r.expected_amount || 0),
                 posCashless: Number(r.pos_cashless || 0),
                 cashPayments: Number(r.cash_payments || 0),
-                parameters: r.parameters || undefined
+                parameters: r.parameters || undefined,
+                approvalStatus: r.approval_status || 'PENDING',
+                approvedBy: r.approved_by,
+                approvedAt: r.approved_at,
+                rejectionReason: r.rejection_reason
             }));
         },
 
@@ -1144,7 +1152,8 @@ export const api = {
                     expected_amount: recon.expectedAmount,
                     pos_cashless: recon.posCashless,
                     cash_payments: recon.cashPayments,
-                    parameters: recon.parameters || null
+                    parameters: recon.parameters || null,
+                    approval_status: 'PENDING'
                 }])
                 .select()
                 .single();
@@ -1174,7 +1183,8 @@ export const api = {
                 expectedAmount: Number(data.expected_amount || 0),
                 posCashless: Number(data.pos_cashless || 0),
                 cashPayments: Number(data.cash_payments || 0),
-                parameters: data.parameters || undefined
+                parameters: data.parameters || undefined,
+                approvalStatus: data.approval_status || 'PENDING'
             };
         },
 
@@ -1186,6 +1196,42 @@ export const api = {
 
             if (error) {
                 console.error('Error updating reconciliation notes:', error);
+                return false;
+            }
+            return true;
+        },
+
+        async approve(id: string, approverName: string): Promise<boolean> {
+            const { error } = await supabase
+                .from('reconciliations')
+                .update({
+                    approval_status: 'APPROVED',
+                    approved_by: approverName,
+                    approved_at: new Date().toISOString(),
+                    rejection_reason: null
+                })
+                .eq('id', id);
+
+            if (error) {
+                console.error('Error approving reconciliation:', error);
+                return false;
+            }
+            return true;
+        },
+
+        async reject(id: string, reason: string): Promise<boolean> {
+            const { error } = await supabase
+                .from('reconciliations')
+                .update({
+                    approval_status: 'REJECTED',
+                    rejection_reason: reason,
+                    approved_by: null,
+                    approved_at: null
+                })
+                .eq('id', id);
+
+            if (error) {
+                console.error('Error rejecting reconciliation:', error);
                 return false;
             }
             return true;
