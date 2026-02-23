@@ -5,7 +5,7 @@
 // Create these collections in the Appwrite Console first,
 // then paste the IDs here.
 
-export const DATABASE_ID = (import.meta as any).env.VITE_APPWRITE_DATABASE_ID || '699a5d330017f77f9b8b';
+export const DATABASE_ID = (import.meta as any).env.VITE_APPWRITE_DATABASE_ID || '699cdd380016ac8b1a41';
 
 // Collection IDs — update these after creating collections in the Appwrite console.
 // Using descriptive names as default IDs (Appwrite allows custom IDs on creation).
