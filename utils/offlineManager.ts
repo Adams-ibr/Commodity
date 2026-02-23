@@ -164,16 +164,16 @@ class OfflineManager {
   /**
    * Sync data when back online
    */
-  private async syncWhenOnline(): void {
+  private async syncWhenOnline(): Promise<void> {
     if (!this.isOnline) return;
 
     try {
       console.log('[OfflineManager] Syncing offline data...');
-      
+
       // Trigger background sync if service worker supports it
       if ('serviceWorker' in navigator && 'sync' in window.ServiceWorkerRegistration.prototype) {
         const registration = await navigator.serviceWorker.ready;
-        await registration.sync.register('background-sync');
+        await (registration as any).sync.register('background-sync');
       }
 
       // Update last sync time
@@ -195,7 +195,7 @@ class OfflineManager {
    */
   cacheData(type: keyof OfflineData, data: any[]): void {
     if (type === 'lastSync') return;
-    
+
     this.offlineData[type] = data;
     this.saveOfflineData();
     console.log(`[OfflineManager] Cached ${data.length} ${type} items`);
@@ -225,7 +225,7 @@ class OfflineManager {
     retryCount: number;
     hasOfflineData: boolean;
   } {
-    const hasOfflineData = Object.values(this.offlineData).some(data => 
+    const hasOfflineData = Object.values(this.offlineData).some(data =>
       Array.isArray(data) && data.length > 0
     );
 
@@ -307,7 +307,7 @@ class OfflineManager {
   destroy(): void {
     window.removeEventListener('online', this.handleOnline.bind(this));
     window.removeEventListener('offline', this.handleOffline.bind(this));
-    
+
     if (this.retryTimeout) {
       clearTimeout(this.retryTimeout);
     }

@@ -18,351 +18,60 @@ import {
   FileCheck,
   History,
   Users,
-  Calculator
+  Calculator,
+  Building,
+  Microscope,
+  Factory,
+  Ship,
+  Anchor,
+  Globe,
+  Phone,
+  Mail,
+  FileEdit,
+  Plus,
+  Calendar,
+  Receipt,
+  Building2,
+  Target,
+  BookOpen,
+  ShieldCheck,
+  CheckCircle
 } from 'lucide-react';
-import { InventoryManager } from './components/InventoryManager';
-import { InventoryStats } from './components/InventoryStats';
-import { AuditView } from './components/AuditView';
-import { RoleDashboard } from './components/RoleDashboard';
-import { SalesModule } from './components/SalesModule';
-import { RestockModule } from './components/RestockModule';
-import { ComplianceDashboard } from './components/ComplianceDashboard';
-import { LocationsManager } from './components/LocationsManager';
-import { TankManager } from './components/TankManager';
-import { PricingManager } from './components/PricingManager';
-import { CustomerManager } from './components/CustomerManager';
+
+import { WarehouseManager } from './components/WarehouseManager';
+import { SupplierManager } from './components/SupplierManager';
+import { PurchaseContractManager } from './components/PurchaseContractManager';
+import { QualityControlManager } from './components/QualityControlManager';
+import { ProcessingManager } from './components/ProcessingManager';
+import { BuyerManager } from './components/BuyerManager';
+import { SalesContractManager } from './components/SalesContractManager';
+import { ShipmentManager } from './components/ShipmentManager';
+import { DocumentManager } from './components/DocumentManager';
+import { AccountingManager } from './components/AccountingManager';
+import { FXManager } from './components/FXManager';
+import { TradeFinanceManager } from './components/TradeFinanceManager';
+import { ComplianceManager } from './components/ComplianceManager';
+import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { UserManagement } from './components/UserManagement';
-import { ReconciliationModule } from './components/ReconciliationModule';
 import { CacheStatus } from './components/CacheStatus';
 import { OfflineStatus } from './components/OfflineStatus';
 import { SignIn } from './components/SignIn';
 import { useAuth } from './context/AuthContext';
-import { COMPLIANCE_RULES } from './constants/compliance';
-import { printReceipt, createReceiptData } from './utils/receiptPrinter';
-import { InventoryItem, Transaction, AuditLogEntry, UserRole, TransactionType, User } from './types';
-
+import { UserRole, User } from './types_commodity';
 import { api } from './services/api';
-import { cacheManager } from './utils/cacheManager';
-import { offlineManager } from './utils/offlineManager';
-import { reconciliationScheduler } from './utils/reconciliationScheduler';
 
 function App() {
   const { user: currentUser, loading: authLoading, signIn, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [inventory, setInventory] = useState<InventoryItem[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
 
-  // Load Data on Mount and Tab Change with Offline Support
-  useEffect(() => {
-    const loadData = async () => {
-      setIsLoading(true);
-      try {
-        if (offlineManager.isCurrentlyOnline()) {
-          // Online: Fetch fresh data from API
-          const [invData, txData] = await Promise.all([
-            api.inventory.getAll(),
-            api.transactions.getAll()
-          ]);
-
-          setInventory(invData);
-          setTransactions(txData);
-
-          // Cache data for offline use
-          offlineManager.cacheData('inventory', invData);
-          offlineManager.cacheData('transactions', txData);
-
-          // Also fetch audit logs separately - REMOVED for pagination per new requirement
-          // api.audit.getAll() ...
-
-        } else {
-          // Offline: Use cached data
-          console.log('Loading cached data for offline use');
-          const cachedInventory = offlineManager.getCachedData('inventory');
-          const cachedTransactions = offlineManager.getCachedData('transactions');
-          // const cachedAuditLogs = offlineManager.getCachedData('auditLogs');
-
-          setInventory(cachedInventory);
-          setTransactions(cachedTransactions);
-          // setAuditLogs(cachedAuditLogs);
-        }
-      } catch (error) {
-        console.error('Failed to load data:', error);
-
-        // Fallback to cached data on error
-        const cachedInventory = offlineManager.getCachedData('inventory');
-        const cachedTransactions = offlineManager.getCachedData('transactions');
-        const cachedAuditLogs = offlineManager.getCachedData('auditLogs');
-
-        if (cachedInventory.length > 0 || cachedTransactions.length > 0) {
-          console.log('Using cached data due to network error');
-          setInventory(cachedInventory);
-          setTransactions(cachedTransactions);
-          // setAuditLogs(cachedAuditLogs);
-        }
-      }
-      setIsLoading(false);
-    };
-
-    loadData();
-  }, [activeTab]);
-
-  // Initialize cache manager on app startup
-  useEffect(() => {
-    // Start cache manager when app loads
-    cacheManager.start();
-
-    // Set up event listener for cache clearing notifications
-    const handleCacheCleared = (event: CustomEvent) => {
-      console.log('Cache cleared:', event.detail);
-      // Optionally show a toast notification or update UI
-    };
-
-    window.addEventListener('cacheCleared', handleCacheCleared as EventListener);
-
-    // Cleanup on component unmount
-    return () => {
-      cacheManager.stop();
-      reconciliationScheduler.stop();
-      window.removeEventListener('cacheCleared', handleCacheCleared as EventListener);
-    };
-  }, []); // Empty dependency array - run only once on mount
-
-  // Initialize reconciliation scheduler when user is logged in
-  useEffect(() => {
-    if (currentUser) {
-      reconciliationScheduler.start(
-        () => inventory,
-        () => transactions,
-        () => currentUser?.name || 'System',
-        (results) => {
-          console.log('[App] Reconciliation completed:', results.length, 'records');
-        }
-      );
-    }
-
-    return () => {
-      reconciliationScheduler.stop();
-    };
-  }, [currentUser, inventory, transactions]);
-
-  // --- Data Filtering Logic based on Role & Location ---
-  const getFilteredInventory = () => {
-    if (!currentUser) return [];
-
-    // Super Admin, Admin, and Accountant see all inventory
-    if (currentUser.role === UserRole.SUPER_ADMIN ||
-      currentUser.role === UserRole.ADMIN ||
-      currentUser.role === UserRole.ACCOUNTANT) {
-      return inventory;
-    }
-
-    return inventory.filter(item =>
-      item.location.includes(currentUser.location) ||
-      currentUser.location.includes('HQ')
-    );
-  };
-
-
-
-  // Removed getFilteredLogs since AuditView handles its own fetching
-  // const getFilteredLogs = () => { ... }
-
-  const getFilteredTransactions = () => {
-    if (!currentUser) return [];
-
-    // Super Admin, Admin, Manager, and Accountant see all transactions
-    if (currentUser.role === UserRole.SUPER_ADMIN ||
-      currentUser.role === UserRole.ADMIN ||
-      currentUser.role === UserRole.MANAGER ||
-      currentUser.role === UserRole.ACCOUNTANT) {
-      return transactions;
-    }
-
-    // CASHIER: Only see their own sales (performedBy matches their name)
-    if (currentUser.role === UserRole.CASHIER) {
-      return transactions.filter(t => t.performedBy === currentUser.name);
-    }
-
-    // Fallback: filter by location
-    return transactions.filter(t =>
-      t.source.includes(currentUser.location) ||
-      t.performedBy === currentUser.name
-    );
-  };
-
-  // --- Transaction Logic ---
-
+  // --- Audit Log centralized handler ---
   const addAuditLog = (action: string, details: string) => {
     if (!currentUser) return;
-    api.audit.log(action, details, currentUser.name, currentUser.role);
-    // Optimistic update removed as AuditView fetches its own data
-  };
-
-  const updateInventoryState = async (tx: Transaction) => {
-    // Find item
-    const item = inventory.find(i => i.id === tx.source);
-    if (!item) return;
-
-    let newVol = item.currentVolume;
-    if (tx.type === 'SALE' || tx.type === 'TRANSFER' || tx.type === 'LOSS') {
-      newVol -= tx.volume;
-    } else if (tx.type === 'RECEIPT') {
-      newVol += tx.volume;
-    }
-
-    const updatedItem = { ...item, currentVolume: newVol };
-
-    // Update DB
-    await api.inventory.update(updatedItem);
-
-    // Update Local State
-    setInventory(prev => prev.map(i => i.id === item.id ? updatedItem : i));
-  };
-
-  const handleAddInventory = async (newItem: InventoryItem) => {
-    const created = await api.inventory.create(newItem);
-    if (created) {
-      setInventory(prev => [...prev, created]);
-      addAuditLog('INVENTORY_ADD', `Added new inventory item: ${newItem.location} (${newItem.product})`);
-    }
-  };
-
-  const handleUpdateInventory = async (updatedItem: InventoryItem) => {
-    await api.inventory.update(updatedItem);
-    setInventory(prev => prev.map(item => item.id === updatedItem.id ? updatedItem : item));
-    addAuditLog('INVENTORY_UPDATE', `Updated inventory item: ${updatedItem.location}`);
-  };
-
-  const handleDeleteInventory = (id: string) => {
-    // Currently dependent on component implementation if it exposes delete
-    const item = inventory.find(i => i.id === id);
-    if (item) {
-      setInventory(prev => prev.filter(i => i.id !== id));
-      addAuditLog('INVENTORY_DELETE', `Deleted inventory item: ${item.location}`);
-    }
-  };
-
-  const handleTransactionCommit = async (data: any) => {
-    if (!currentUser) return;
-
-    // Determine status based on role
-    // Sales are now automatically approved for all roles as per new requirement
-    const status = 'APPROVED';
-
-    // Create new transaction object via API
-    // IMPORTANT: Include unitPrice and totalAmount for receipts
-    const txData = {
-      type: data.type,
-      product: data.product,
-      volume: data.volume,
-      sourceId: data.sourceId,
-      destination: data.destination || '',
-      customerId: data.customerId,
-      customerName: data.customerName,
-      refDoc: data.refDoc,
-      datePrefix: data.datePrefix, // For atomic invoice generation
-      performedBy: currentUser.name,
-      status: status,
-      unitPrice: data.unitPrice,     // Pass through for receipt
-      totalAmount: data.totalAmount  // Pass through for receipt
-    };
-
-    const newTx = await api.transactions.create(txData);
-    if (!newTx) return;
-
-    setTransactions([newTx, ...transactions]);
-
-    const sourceItem = inventory.find(i => i.id === data.sourceId);
-    const locationName = sourceItem ? sourceItem.location : 'Unknown Source';
-
-    // Construct detailed log message
-    let details = `${data.type} of ${data.volume.toLocaleString()}L ${data.product}`;
-    if (data.type === 'TRANSFER') {
-      details += ` from ${locationName} to ${data.destination || 'External'}`;
-    } else {
-      details += ` at ${locationName}`;
-    }
-
-    // Add customer info if present
-    if (data.customerName) {
-      details += ` for ${data.customerName} (${data.type === 'SALE' ? 'Sale' : 'Tx'})`;
-    }
-
-    details += `. Ref: ${newTx.referenceDoc}`;
-
-    if (status === 'APPROVED') {
-      updateInventoryState(newTx);
-      addAuditLog('TRANSACTION_COMMIT', details);
-
-      // Auto-print receipt - use data from the created transaction plus original price data
-      printReceipt(createReceiptData({
-        ...newTx,
-        sourceId: newTx.source,
-        refDoc: newTx.referenceDoc,
-        unitPrice: data.unitPrice,     // Use original price from sales form
-        totalAmount: data.totalAmount  // Use original total from sales form
-      }, inventory));
-    } else {
-      addAuditLog('TRANSACTION_SUBMIT', `${details} (Pending Approval)`);
-      alert("Transaction submitted for approval.");
-    }
-  };
-
-  const handleTransactionApprove = (txId: string) => {
-    const tx = transactions.find(t => t.id === txId);
-    if (!tx) return;
-
-    // Update status
-    const updatedTransactions = transactions.map(t =>
-      t.id === txId ? { ...t, status: 'APPROVED' as const } : t
-    );
-    setTransactions(updatedTransactions);
-
-    // Update Inventory
-    updateInventoryState(tx);
-
-    // Find location name for log
-    const sourceItem = inventory.find(i => i.id === tx.source);
-    const locationName = sourceItem ? sourceItem.location : 'Unknown Source';
-
-    // Construct detailed log message for approval
-    let details = `Approved ${tx.type} of ${tx.volume.toLocaleString()}L ${tx.product}`;
-    if (tx.type === 'TRANSFER') {
-      details += ` from ${locationName} to ${tx.destination || 'External'}`;
-    } else {
-      details += ` at ${locationName}`;
-    }
-    details += `. Ref: ${tx.referenceDoc}. Approved by ${currentUser?.name}`;
-
-    addAuditLog('TRANSACTION_APPROVE', details);
-    alert("Transaction approved and ledger updated.");
-  };
-
-  const handleTransactionDelete = async (txId: string) => {
-    if (!currentUser) return;
-
-    const tx = transactions.find(t => t.id === txId);
-    if (!tx) return;
-
-    const confirmed = window.confirm(
-      `Are you sure you want to delete this transaction?\n\nRef: ${tx.referenceDoc}\nProduct: ${tx.product}\nVolume: ${tx.volume.toLocaleString()} L\nCustomer: ${tx.customerName || 'N/A'}\n\nThis action cannot be undone.`
-    );
-    if (!confirmed) return;
-
-    const success = await api.transactions.delete(txId);
-    if (success) {
-      setTransactions(prev => prev.filter(t => t.id !== txId));
-
-      const sourceItem = inventory.find(i => i.id === tx.source);
-      const locationName = sourceItem ? sourceItem.location : 'Unknown';
-      addAuditLog(
-        'TRANSACTION_DELETE',
-        `Deleted ${tx.type} transaction. Ref: ${tx.referenceDoc}, Product: ${tx.product}, Volume: ${tx.volume.toLocaleString()}L at ${locationName}. Customer: ${tx.customerName || 'N/A'}. Deleted by ${currentUser.name}`
-      );
-    } else {
-      alert('Failed to delete transaction. Please try again.');
+    try {
+      api.audit.log(action, details, currentUser.name, currentUser.role);
+    } catch (e) {
+      console.error('Failed to log audit:', e);
     }
   };
 
@@ -371,7 +80,6 @@ function App() {
     setActiveTab('dashboard');
   };
 
-  // Show loading state
   if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-indigo-900 to-slate-900 flex items-center justify-center">
@@ -380,76 +88,11 @@ function App() {
     );
   }
 
-  // Show SignIn if not logged in (internal app - no sign up)
   if (!currentUser) {
     return <SignIn onSignIn={signIn} />;
   }
 
-  // Define contents based on active tab
-  const renderContent = () => {
-    const visibleInventory = getFilteredInventory();
-    const visibleTransactions = getFilteredTransactions();
-
-    switch (activeTab) {
-      case 'dashboard':
-        return (
-          <RoleDashboard
-            user={currentUser}
-            inventory={visibleInventory}
-            auditLogs={[]} // Dashboard might still need recent logs, but for now passing empty or we can add a 'recent logs' fetch in Dashboard
-            transactions={visibleTransactions}
-            complianceRules={COMPLIANCE_RULES}
-            onCommitTransaction={handleTransactionCommit}
-            onApproveTransaction={handleTransactionApprove}
-          />
-        );
-      case 'inventory':
-        return (
-          <div className="bg-white rounded-lg shadow-sm border border-slate-200">
-            <div className="p-6">
-              <InventoryManager
-                inventory={visibleInventory}
-                userRole={currentUser.role}
-                onAdd={handleAddInventory}
-                onUpdate={handleUpdateInventory}
-                onDelete={handleDeleteInventory}
-              />
-            </div>
-          </div>
-        );
-      case 'audit':
-        return <AuditView />; // No props needed, fetches its own data
-      case 'sales':
-        return <SalesModule inventory={visibleInventory} transactions={visibleTransactions} onCommitTransaction={handleTransactionCommit} onDeleteTransaction={handleTransactionDelete} userRole={currentUser.role} />;
-      case 'customers':
-        return <CustomerManager userRole={currentUser.role} transactions={visibleTransactions} onAuditLog={addAuditLog} />;
-      case 'restock':
-        return <RestockModule inventory={visibleInventory} onCommitTransaction={handleTransactionCommit} />;
-      case 'compliance':
-        return <ComplianceDashboard rules={COMPLIANCE_RULES} />;
-      case 'locations':
-        return <LocationsManager userRole={currentUser.role} userName={currentUser.name} />;
-      case 'tanks':
-        return <TankManager userRole={currentUser.role} userName={currentUser.name} />;
-      case 'pricing':
-        return <PricingManager userRole={currentUser.role} userName={currentUser.name} />;
-      case 'reconciliation':
-        return (
-          <ReconciliationModule
-            userRole={currentUser.role}
-            userName={currentUser.name}
-            inventory={visibleInventory}
-            transactions={visibleTransactions}
-            onAuditLog={addAuditLog}
-          />
-        );
-      case 'users':
-        return <UserManagement currentUserRole={currentUser.role} currentUserName={currentUser.name} />;
-      default:
-        return <div className="text-center p-10 text-slate-500">Module under construction</div>;
-    }
-  };
-
+  // Common NavItem Component
   const NavItem = ({ id, label, icon: Icon }: any) => (
     <button
       onClick={() => { setActiveTab(id); setSidebarOpen(false); }}
@@ -462,6 +105,48 @@ function App() {
       <span className="font-medium">{label}</span>
     </button>
   );
+
+  const renderContent = () => {
+    switch (activeTab) {
+      case 'dashboard':
+        return <AnalyticsDashboard userRole={currentUser.role} userName={currentUser.name} onAuditLog={addAuditLog} />;
+      case 'inventory':
+        return <WarehouseManager userRole={currentUser.role} onAuditLog={addAuditLog} />;
+      case 'sales-contracts':
+        return <SalesContractManager userRole={currentUser.role} onAuditLog={addAuditLog} />;
+      case 'shipments':
+        return <ShipmentManager userRole={currentUser.role} onAuditLog={addAuditLog} />;
+      case 'buyers':
+        return <BuyerManager userRole={currentUser.role} onAuditLog={addAuditLog} />;
+      case 'suppliers':
+        return <SupplierManager userRole={currentUser.role} onAuditLog={addAuditLog} />;
+      case 'contracts':
+        return <PurchaseContractManager userRole={currentUser.role} onAuditLog={addAuditLog} />;
+      case 'quality':
+        return <QualityControlManager userRole={currentUser.role} onAuditLog={addAuditLog} />;
+      case 'processing':
+        return <ProcessingManager userRole={currentUser.role} onAuditLog={addAuditLog} />;
+      case 'documents':
+        return (
+          <div className="space-y-6">
+            <h2 className="text-2xl font-bold text-slate-800">Document Library</h2>
+            <DocumentManager referenceType="GLOBAL" referenceId="all" title="All System Documents" onAuditLog={addAuditLog} />
+          </div>
+        );
+      case 'users':
+        return <UserManagement currentUserRole={currentUser.role} currentUserName={currentUser.name} />;
+      case 'accounting':
+        return <AccountingManager userRole={currentUser.role} onAuditLog={addAuditLog} />;
+      case 'fx':
+        return <FXManager onAuditLog={addAuditLog} />;
+      case 'trade-finance':
+        return <TradeFinanceManager onAuditLog={addAuditLog} />;
+      case 'compliance':
+        return <ComplianceManager onAuditLog={addAuditLog} />;
+      default:
+        return <div className="text-center p-10 text-slate-500">Module under construction</div>;
+    }
+  };
 
   return (
     <div className="flex h-screen bg-slate-50 overflow-hidden">
@@ -480,7 +165,7 @@ function App() {
       `}>
         <div className="flex items-center justify-between p-6 border-b border-indigo-800">
           <div className="flex items-center justify-center flex-1">
-            <img src="/logo.png" alt="Logo" className="h-12 w-auto" />
+            <h2 className="text-xl font-bold tracking-wider">GALALTIX</h2>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-indigo-300">
             <X className="w-6 h-6" />
@@ -489,45 +174,40 @@ function App() {
 
         <div className="flex-1 overflow-y-auto py-6 px-3 space-y-1">
           <NavItem id="dashboard" label="Dashboard" icon={LayoutDashboard} />
+          <NavItem id="inventory" label="Warehouse & Inventory" icon={Layers} />
 
-          {/* Inventory is relevant for everyone */}
-          <NavItem id="inventory" label="Inventory Ledger" icon={Layers} />
+          <div className="pt-4 mt-4 border-t border-slate-700/50">
+            <p className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Finance & Accounting</p>
+            <NavItem id="accounting" label="Financial Journal" icon={BookOpen} />
+            <NavItem id="fx" label="FX Management" icon={Globe} />
+            <NavItem id="trade-finance" label="Trade Finance" icon={ShieldCheck} />
+          </div>
 
-          {/* Audit Trail is vital for Auditors and Admins, but Managers can see their history */}
-          <NavItem id="audit" label="Audit Trail" icon={History} />
+          <div className="pt-4 mt-4 border-t border-slate-700/50">
+            <p className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Sales & Export</p>
+            <NavItem id="buyers" label="Buyer Directory" icon={Target} />
+            <NavItem id="sales-contracts" label="Sales Contracts" icon={FileText} />
+            <NavItem id="shipments" label="Shipments" icon={Ship} />
+            <NavItem id="compliance" label="Export Compliance" icon={CheckCircle} />
+          </div>
 
-          <NavItem id="sales" label="Sales & Dealers" icon={UserCircle} />
-          <NavItem id="customers" label="Customer Management" icon={Users} />
+          <div className="pt-4 mt-4 border-t border-slate-700/50">
+            <p className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Procurement</p>
+            <NavItem id="suppliers" label="Supplier Directory" icon={Building} />
+            <NavItem id="contracts" label="Purchase Contracts" icon={FileText} />
+            <NavItem id="quality" label="Quality Control" icon={Microscope} />
+            <NavItem id="processing" label="Processing Module" icon={Factory} />
+          </div>
 
-          {/* Hide Add Inventory for Cashiers */}
-          {currentUser.role !== UserRole.CASHIER && (
-            <NavItem id="restock" label="Add Inventory" icon={Layers} />
-          )}
-
-          {/* Compliance is key for Auditors/Admins */}
-          <NavItem id="compliance" label="SRS Compliance" icon={FileCheck} />
-
-          {/* User Management - Admin/Super Admin only */}
-          {(currentUser.role === UserRole.SUPER_ADMIN || currentUser.role === UserRole.ADMIN) && (
-            <NavItem id="users" label="User Management" icon={Users} />
-          )}
-
-          {/* Locations & Tanks - Admin/Super Admin only */}
-          {(currentUser.role === UserRole.SUPER_ADMIN || currentUser.role === UserRole.ADMIN) && (
-            <>
-              <NavItem id="locations" label="Locations" icon={MapPin} />
-              <NavItem id="tanks" label="Tank Management" icon={Fuel} />
-              <NavItem id="pricing" label="Price Management" icon={DollarSign} />
-            </>
-          )}
-
-          {/* Reconciliation - Admin/Manager/Accountant */}
-          {(currentUser.role === UserRole.SUPER_ADMIN ||
-            currentUser.role === UserRole.ADMIN ||
-            currentUser.role === UserRole.MANAGER ||
-            currentUser.role === UserRole.ACCOUNTANT) && (
-              <NavItem id="reconciliation" label="Reconciliation" icon={Calculator} />
+          <div className="pt-4 mt-4 border-t border-slate-700/50">
+            <p className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">System Management</p>
+            {(currentUser.role === UserRole.SUPER_ADMIN || currentUser.role === UserRole.ADMIN) && (
+              <>
+                <NavItem id="users" label="User Management" icon={Users} />
+                <NavItem id="documents" label="Document Library" icon={FileText} />
+              </>
             )}
+          </div>
         </div>
 
         <div className="p-4 border-t border-indigo-800">
@@ -539,7 +219,7 @@ function App() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{currentUser.name}</p>
-              <p className="text-xs text-indigo-300 truncate">{currentUser.role}</p>
+              <p className="text-xs text-indigo-300 truncate">{currentUser.role.replace('_', ' ')}</p>
             </div>
             <button onClick={handleLogout} className="hover:bg-indigo-800 p-1 rounded transition-colors" title="Sign Out">
               <LogOut className="w-4 h-4 text-indigo-400 cursor-pointer hover:text-white" />

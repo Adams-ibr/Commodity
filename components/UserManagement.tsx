@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { UserRole, hasPermission, canManageRole, Location } from '../types';
+import { UserRole, hasPermission, canManageRole, Location } from '../types_commodity';
 import { api } from '../services/api';
 import {
     Users,
@@ -20,7 +20,7 @@ interface UserData {
     email: string;
     name: string;
     role: UserRole;
-    location: string;
+    locationId: string;
     isActive: boolean;
     createdAt: string;
 }
@@ -47,8 +47,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
     const [formData, setFormData] = useState({
         email: '',
         name: '',
-        role: UserRole.CASHIER as UserRole,
-        location: 'HQ - Abuja',
+        role: UserRole.OPERATOR as UserRole,
+        locationId: 'HQ - Abuja',
         password: ''
     });
 
@@ -86,7 +86,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                 email: user.email,
                 name: user.name,
                 role: user.role,
-                location: user.location,
+                locationId: user.locationId,
                 password: ''
             });
         } else {
@@ -94,8 +94,8 @@ export const UserManagement: React.FC<UserManagementProps> = ({
             setFormData({
                 email: '',
                 name: '',
-                role: UserRole.CASHIER,
-                location: locations.length > 0 ? locations[0].name : '',
+                role: UserRole.OPERATOR,
+                locationId: locations.length > 0 ? locations[0].id : '',
                 password: ''
             });
         }
@@ -121,7 +121,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                 const updated = await api.users.update(editingUser.id, {
                     name: formData.name,
                     role: formData.role,
-                    location: formData.location
+                    locationId: formData.locationId
                 });
                 if (updated) {
                     setUsers(prev => prev.map(u => u.id === editingUser.id ? { ...u, ...updated } : u));
@@ -134,7 +134,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                     email: formData.email,
                     name: formData.name,
                     role: formData.role,
-                    location: formData.location,
+                    locationId: formData.locationId,
                     password: formData.password
                 });
                 if (created) {
@@ -202,11 +202,11 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                 return 'bg-purple-100 text-purple-800 border-purple-200';
             case UserRole.ADMIN:
                 return 'bg-red-100 text-red-800 border-red-200';
-            case UserRole.MANAGER:
+            case UserRole.PROCUREMENT_MANAGER:
                 return 'bg-blue-100 text-blue-800 border-blue-200';
             case UserRole.ACCOUNTANT:
                 return 'bg-green-100 text-green-800 border-green-200';
-            case UserRole.CASHIER:
+            case UserRole.OPERATOR:
                 return 'bg-slate-100 text-slate-800 border-slate-200';
             default:
                 return 'bg-gray-100 text-gray-800 border-gray-200';
@@ -325,7 +325,7 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-500">
-                                        {user.location}
+                                        {locations.find(l => l.id === user.locationId)?.name || user.locationId}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${user.isActive
@@ -438,14 +438,14 @@ export const UserManagement: React.FC<UserManagementProps> = ({
                             <div>
                                 <label className="block text-sm font-medium text-slate-700 mb-1">Location</label>
                                 <select
-                                    value={formData.location}
-                                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                                    value={formData.locationId}
+                                    onChange={(e) => setFormData({ ...formData, locationId: e.target.value })}
                                     required
                                     className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
                                 >
                                     <option value="">Select Location</option>
                                     {locations.map(loc => (
-                                        <option key={loc.id} value={loc.name}>{loc.name}</option>
+                                        <option key={loc.id} value={loc.id}>{loc.name}</option>
                                     ))}
                                 </select>
                             </div>
