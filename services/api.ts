@@ -99,6 +99,44 @@ export const api = {
             }));
 
             return { data: logs, count: total || 0 };
+        },
+
+        async search(params: { query?: string; action?: string; date?: string; page?: number; limit?: number }): Promise<{ data: AuditLogEntry[], count: number }> {
+            const { query, action, date, page = 1, limit = 50 } = params;
+            const offset = (page - 1) * limit;
+            const queries: string[] = [Query.orderDesc('$createdAt'), Query.limit(limit), Query.offset(offset)];
+
+            if (date) {
+                queries.push(Query.greaterThanEqual('$createdAt', `${date}T00:00:00.000Z`));
+                queries.push(Query.lessThanEqual('$createdAt', `${date}T23:59:59.999Z`));
+            }
+            if (action) queries.push(Query.equal('action', action));
+
+            const { data, total } = await dbList(COLLECTIONS.AUDIT_LOGS, queries);
+            let logs = (data || []).map((l: any) => ({
+                id: l.$id, timestamp: l.$createdAt, action: l.action,
+                details: l.details, user: l.user_id, role: l.user_role as UserRole, ipHash: l.ip_hash
+            }));
+
+            // Client-side text search
+            if (query) {
+                const q = query.toLowerCase();
+                logs = logs.filter((l: AuditLogEntry) =>
+                    l.action.toLowerCase().includes(q) ||
+                    l.details.toLowerCase().includes(q) ||
+                    l.user.toLowerCase().includes(q)
+                );
+            }
+
+            return { data: logs, count: total || 0 };
+        },
+
+        exportCSV(logs: AuditLogEntry[]): string {
+            const header = 'Timestamp,Action,Details,User,Role\n';
+            const rows = logs.map(l =>
+                `"${l.timestamp}","${l.action}","${l.details.replace(/"/g, '""')}","${l.user}","${l.role}"`
+            ).join('\n');
+            return header + rows;
         }
     },
 

@@ -135,7 +135,7 @@
   - Add dashboard widgets for key performance indicators
   - _Requirements: 11.1, 11.2, 11.3, 11.5_
 
-- [ ] 16. Document Management System
+- [x] 16. Document Management System
   - Implement secure document upload per transaction
   - Create document versioning and change tracking
   - Add role-based document access control
@@ -144,7 +144,7 @@
   - Add document retention policies and archival
   - _Requirements: 12.1, 12.2, 12.3, 12.4, 12.5_
 
-- [ ] 17. Audit Trail and Security Enhancement
+- [x] 17. Audit Trail and Security Enhancement
   - Enhance audit logging for all financial transactions
   - Implement comprehensive change history tracking
   - Add login history and session management

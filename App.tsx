@@ -52,6 +52,7 @@ import { FXManager } from './components/FXManager';
 import { TradeFinanceManager } from './components/TradeFinanceManager';
 import { ComplianceManager } from './components/ComplianceManager';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
+import { AuditTrailManager } from './components/AuditTrailManager';
 import { UserManagement } from './components/UserManagement';
 import { CacheStatus } from './components/CacheStatus';
 import { OfflineStatus } from './components/OfflineStatus';
@@ -143,6 +144,8 @@ function App() {
         return <TradeFinanceManager onAuditLog={addAuditLog} />;
       case 'compliance':
         return <ComplianceManager onAuditLog={addAuditLog} />;
+      case 'audit':
+        return <AuditTrailManager />;
       default:
         return <div className="text-center p-10 text-slate-500">Module under construction</div>;
     }
@@ -205,6 +208,7 @@ function App() {
               <>
                 <NavItem id="users" label="User Management" icon={Users} />
                 <NavItem id="documents" label="Document Library" icon={FileText} />
+                <NavItem id="audit" label="Audit Trail" icon={AlertTriangle} />
               </>
             )}
           </div>
