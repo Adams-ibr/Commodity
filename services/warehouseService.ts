@@ -8,26 +8,34 @@ import { CommodityBatch, BatchStatus, BatchMovement, MovementType, ApiResponse, 
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';
 
 export class WarehouseService {
-    async getInventory(companyId: string = DEFAULT_COMPANY_ID): Promise<ApiResponse<CommodityBatch[]>> {
+    async getInventory(
+        params: { companyId?: string; page?: number; limit?: number } = {}
+    ): Promise<ApiResponse<{ data: CommodityBatch[]; total: number }>> {
+        const { companyId = DEFAULT_COMPANY_ID, page = 1, limit = 100 } = params;
+        const offset = (page - 1) * limit;
         try {
-            const { data, error } = await dbList(COLLECTIONS.COMMODITY_BATCHES, [
+            const { data, total, error } = await dbList(COLLECTIONS.COMMODITY_BATCHES, [
                 Query.equal('company_id', companyId),
-                Query.greaterThan('current_weight', 0),
-                Query.orderDesc('received_date')
+                Query.orderDesc('received_date'),
+                Query.limit(limit),
+                Query.offset(offset)
             ]);
             if (error) return { success: false, error };
-            const batches: CommodityBatch[] = (data || []).map((item: any) => ({
-                id: item.$id, companyId: item.company_id, batchNumber: item.batch_number,
-                commodityTypeId: item.commodity_type_id, supplierId: item.supplier_id,
-                purchaseContractId: item.purchase_contract_id, locationId: item.location_id,
-                cropYear: item.crop_year, receivedDate: item.received_date,
-                receivedWeight: item.received_weight, currentWeight: item.current_weight,
-                packagingInfo: item.packaging_info, grade: item.grade, status: item.status,
-                costPerTon: item.cost_per_ton, totalCost: item.total_cost,
-                currency: item.currency, notes: item.notes, createdBy: item.created_by,
-                createdAt: item.$createdAt, updatedAt: item.$updatedAt
-            }));
-            return { success: true, data: batches };
+            // Filter current_weight > 0 in code to avoid attribute index issues
+            const batches: CommodityBatch[] = (data || [])
+                .filter((item: any) => Number(item.current_weight || 0) > 0)
+                .map((item: any) => ({
+                    id: item.$id, companyId: item.company_id, batchNumber: item.batch_number,
+                    commodityTypeId: item.commodity_type_id, supplierId: item.supplier_id,
+                    purchaseContractId: item.purchase_contract_id, locationId: item.location_id,
+                    cropYear: item.crop_year, receivedDate: item.received_date,
+                    receivedWeight: item.received_weight, currentWeight: item.current_weight,
+                    packagingInfo: item.packaging_info, grade: item.grade, status: item.status,
+                    costPerTon: item.cost_per_ton, totalCost: item.total_cost,
+                    currency: item.currency, notes: item.notes, createdBy: item.created_by,
+                    createdAt: item.$createdAt, updatedAt: item.$updatedAt
+                }));
+            return { success: true, data: { data: batches, total: total || 0 } };
         } catch (error) {
             return { success: false, error: 'Failed to fetch inventory' };
         }

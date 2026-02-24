@@ -36,10 +36,10 @@ export const SignIn: React.FC<SignInProps> = ({ onSignIn }) => {
         {/* Header */}
         <div className="text-center mb-10">
           <div className="flex justify-center mb-6">
-            <img src="/logo.png" alt="Logo" className="h-28 w-auto drop-shadow-2xl" />
+            <img src="/logo.png" alt="Galaltix Nigeria Limited" className="h-32 w-auto drop-shadow-2xl" />
           </div>
           <p className="text-indigo-200/80 mt-4">
-            Secure Inventory Management System
+            Commodity Trading & Management System
           </p>
         </div>
 
@@ -116,7 +116,7 @@ export const SignIn: React.FC<SignInProps> = ({ onSignIn }) => {
         {/* Footer */}
         <div className="mt-8 text-center">
           <p className="text-xs text-indigo-300/50 uppercase tracking-widest font-semibold">
-            Protected by Enterprise Grade Security
+            Galaltix Nigeria Limited
           </p>
           <p className="text-xs text-indigo-300/30 mt-2">
             Contact your administrator for access

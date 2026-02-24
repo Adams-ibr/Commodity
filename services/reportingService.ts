@@ -43,22 +43,33 @@ export interface BuyerPerformanceRow {
     totalContractValue: number; fulfillmentRate: number;
 }
 
+// Safe wrapper: returns empty data instead of throwing on missing collection/attribute
+async function safeDbList(collection: string, queries: string[] = []): Promise<{ data: any[]; total: number }> {
+    try {
+        const res = await dbList(collection, queries);
+        if (res.error) return { data: [], total: 0 };
+        return { data: res.data || [], total: res.total || 0 };
+    } catch {
+        return { data: [], total: 0 };
+    }
+}
+
 export class ReportingService {
     async getDashboardKPIs(companyId: string = DEFAULT_COMPANY_ID): Promise<ApiResponse<DashboardKPIs>> {
         try {
             const [batchesRes, pcRes, scRes, qcRes, shipRes, suppRes, buyRes, procRes] = await Promise.all([
-                dbList(COLLECTIONS.COMMODITY_BATCHES, [Query.equal('company_id', companyId), Query.greaterThan('current_weight', 0)]),
-                dbList(COLLECTIONS.PURCHASE_CONTRACTS, [Query.equal('company_id', companyId)]),
-                dbList(COLLECTIONS.SALES_CONTRACTS, [Query.equal('company_id', companyId)]),
-                dbList(COLLECTIONS.QUALITY_TESTS, [Query.equal('company_id', companyId), Query.equal('status', 'PENDING')]),
-                dbList(COLLECTIONS.SHIPMENTS, [Query.equal('company_id', companyId), Query.equal('status', 'IN_TRANSIT')]),
-                dbList(COLLECTIONS.SUPPLIERS, [Query.equal('company_id', companyId), Query.equal('is_active', true)]),
-                dbList(COLLECTIONS.BUYERS, [Query.equal('company_id', companyId), Query.equal('is_active', true)]),
-                dbList(COLLECTIONS.PROCESSING_ORDERS, [Query.equal('company_id', companyId), Query.equal('status', 'IN_PROGRESS')])
+                safeDbList(COLLECTIONS.COMMODITY_BATCHES, [Query.equal('company_id', companyId), Query.limit(500)]),
+                safeDbList(COLLECTIONS.PURCHASE_CONTRACTS, [Query.equal('company_id', companyId), Query.limit(500)]),
+                safeDbList(COLLECTIONS.SALES_CONTRACTS, [Query.equal('company_id', companyId), Query.limit(500)]),
+                safeDbList(COLLECTIONS.QUALITY_TESTS, [Query.equal('company_id', companyId), Query.limit(500)]),
+                safeDbList(COLLECTIONS.SHIPMENTS, [Query.equal('company_id', companyId), Query.limit(500)]),
+                safeDbList(COLLECTIONS.SUPPLIERS, [Query.equal('company_id', companyId), Query.limit(500)]),
+                safeDbList(COLLECTIONS.BUYERS, [Query.equal('company_id', companyId), Query.limit(500)]),
+                safeDbList(COLLECTIONS.PROCESSING_ORDERS, [Query.equal('company_id', companyId), Query.limit(500)])
             ]);
-            const batches = batchesRes.data || [];
-            const pc = pcRes.data || [];
-            const sc = scRes.data || [];
+            const batches = batchesRes.data;
+            const pc = pcRes.data;
+            const sc = scRes.data;
             const totalInventoryWeight = batches.reduce((s: number, b: any) => s + Number(b.current_weight || 0), 0);
             const activePurchaseContracts = pc.filter((c: any) => c.status === 'ACTIVE').length;
             const activeSalesContracts = sc.filter((c: any) => c.status === 'ACTIVE').length;
@@ -68,12 +79,12 @@ export class ReportingService {
                 success: true, data: {
                     totalInventoryWeight: Math.round(totalInventoryWeight * 100) / 100,
                     activePurchaseContracts, activeSalesContracts,
-                    pendingQualityTests: qcRes.data?.length || 0,
-                    shipmentsInTransit: shipRes.data?.length || 0,
-                    totalSuppliers: suppRes.data?.length || 0,
-                    totalBuyers: buyRes.data?.length || 0,
+                    pendingQualityTests: qcRes.data.filter((t: any) => t.status === 'PENDING').length,
+                    shipmentsInTransit: shipRes.data.filter((s: any) => s.status === 'IN_TRANSIT').length,
+                    totalSuppliers: suppRes.data.filter((s: any) => s.is_active !== false).length,
+                    totalBuyers: buyRes.data.filter((b: any) => b.is_active !== false).length,
                     procurementSpend, salesRevenue,
-                    processingOrdersActive: procRes.data?.length || 0
+                    processingOrdersActive: procRes.data.filter((o: any) => o.status === 'IN_PROGRESS').length
                 }
             };
         } catch (error) { return { success: false, error: 'Failed to fetch dashboard KPIs' }; }
@@ -81,13 +92,18 @@ export class ReportingService {
 
     async getCommodityProfitSummary(companyId: string = DEFAULT_COMPANY_ID): Promise<ApiResponse<CommodityProfitRow[]>> {
         try {
-            const { data: commodityTypes } = await dbList(COLLECTIONS.COMMODITY_TYPES, [Query.equal('company_id', companyId), Query.equal('is_active', true)]);
-            if (!commodityTypes || commodityTypes.length === 0) return { success: true, data: [] };
-            const { data: batches } = await dbList(COLLECTIONS.COMMODITY_BATCHES, [Query.equal('company_id', companyId)]);
-            const { data: salesContracts } = await dbList(COLLECTIONS.SALES_CONTRACTS, [Query.equal('company_id', companyId)]);
+            const ctRes = await safeDbList(COLLECTIONS.COMMODITY_TYPES, [Query.equal('company_id', companyId), Query.limit(500)]);
+            const commodityTypes = ctRes.data;
+            if (commodityTypes.length === 0) return { success: true, data: [] };
+            const [batchesRes, salesRes] = await Promise.all([
+                safeDbList(COLLECTIONS.COMMODITY_BATCHES, [Query.equal('company_id', companyId), Query.limit(500)]),
+                safeDbList(COLLECTIONS.SALES_CONTRACTS, [Query.equal('company_id', companyId), Query.limit(500)])
+            ]);
+            const batches = batchesRes.data;
+            const salesContracts = salesRes.data;
             const rows: CommodityProfitRow[] = commodityTypes.map((ct: any) => {
-                const typeBatches = (batches || []).filter((b: any) => b.commodity_type_id === ct.$id);
-                const typeSales = (salesContracts || []).filter((s: any) => s.commodity_type_id === ct.$id);
+                const typeBatches = batches.filter((b: any) => b.commodity_type_id === ct.$id);
+                const typeSales = salesContracts.filter((s: any) => s.commodity_type_id === ct.$id);
                 const totalPurchasedMT = typeBatches.reduce((s: number, b: any) => s + Number(b.received_weight || 0), 0);
                 const procurementCost = typeBatches.reduce((s: number, b: any) => s + Number(b.total_cost || 0), 0);
                 const totalSoldMT = typeSales.reduce((s: number, s2: any) => s + Number(s2.contracted_quantity || 0), 0);
@@ -103,15 +119,17 @@ export class ReportingService {
 
     async getWarehouseStockReport(companyId: string = DEFAULT_COMPANY_ID): Promise<ApiResponse<StockAgingRow[]>> {
         try {
-            const { data: batches } = await dbList(COLLECTIONS.COMMODITY_BATCHES, [Query.equal('company_id', companyId), Query.greaterThan('current_weight', 0), Query.orderAsc('received_date')]);
+            const batchesRes = await safeDbList(COLLECTIONS.COMMODITY_BATCHES, [Query.equal('company_id', companyId), Query.orderAsc('received_date'), Query.limit(500)]);
             const [ctRes, locRes] = await Promise.all([
-                dbList(COLLECTIONS.COMMODITY_TYPES, [Query.equal('company_id', companyId)]),
-                dbList(COLLECTIONS.LOCATIONS, [])
+                safeDbList(COLLECTIONS.COMMODITY_TYPES, [Query.equal('company_id', companyId), Query.limit(500)]),
+                safeDbList(COLLECTIONS.LOCATIONS, [Query.limit(500)])
             ]);
-            const ctMap = new Map((ctRes.data || []).map((c: any) => [c.$id, c.name]));
-            const locMap = new Map((locRes.data || []).map((l: any) => [l.$id, l.name]));
+            const ctMap = new Map(ctRes.data.map((c: any) => [c.$id, c.name]));
+            const locMap = new Map(locRes.data.map((l: any) => [l.$id, l.name]));
             const now = new Date();
-            const rows: StockAgingRow[] = (batches || []).map((b: any) => {
+            // Filter in code instead of query to avoid missing attribute errors
+            const activeBatches = batchesRes.data.filter((b: any) => Number(b.current_weight || 0) > 0);
+            const rows: StockAgingRow[] = activeBatches.map((b: any) => {
                 const receivedDate = new Date(b.received_date);
                 const ageDays = Math.floor((now.getTime() - receivedDate.getTime()) / (1000 * 60 * 60 * 24));
                 return { batchId: b.$id, batchNumber: b.batch_number, commodityTypeId: b.commodity_type_id, commodityName: ctMap.get(b.commodity_type_id) || 'Unknown', locationId: b.location_id, locationName: locMap.get(b.location_id) || 'Unknown', currentWeight: Number(b.current_weight), receivedDate: b.received_date, ageDays, grade: b.grade || 'Ungraded', status: b.status };
@@ -123,11 +141,12 @@ export class ReportingService {
     async getSupplierScorecard(companyId: string = DEFAULT_COMPANY_ID): Promise<ApiResponse<SupplierScorecardRow[]>> {
         try {
             const [suppliersRes, contractsRes] = await Promise.all([
-                dbList(COLLECTIONS.SUPPLIERS, [Query.equal('company_id', companyId), Query.equal('is_active', true)]),
-                dbList(COLLECTIONS.PURCHASE_CONTRACTS, [Query.equal('company_id', companyId)])
+                safeDbList(COLLECTIONS.SUPPLIERS, [Query.equal('company_id', companyId), Query.limit(500)]),
+                safeDbList(COLLECTIONS.PURCHASE_CONTRACTS, [Query.equal('company_id', companyId), Query.limit(500)])
             ]);
-            const suppliers = suppliersRes.data || [];
-            const contracts = contractsRes.data || [];
+            // Filter is_active in code to avoid index issues
+            const suppliers = suppliersRes.data.filter((s: any) => s.is_active !== false);
+            const contracts = contractsRes.data;
             const rows: SupplierScorecardRow[] = suppliers.map((s: any) => {
                 const sc = contracts.filter((c: any) => c.supplier_id === s.$id);
                 const completed = sc.filter((c: any) => c.status === 'COMPLETED').length;
@@ -144,8 +163,9 @@ export class ReportingService {
 
     async getProcessingYieldReport(companyId: string = DEFAULT_COMPANY_ID): Promise<ApiResponse<ProcessingYieldRow[]>> {
         try {
-            const { data: orders } = await dbList(COLLECTIONS.PROCESSING_ORDERS, [Query.equal('company_id', companyId)]);
-            if (!orders || orders.length === 0) return { success: true, data: [] };
+            const ordersRes = await safeDbList(COLLECTIONS.PROCESSING_ORDERS, [Query.equal('company_id', companyId), Query.limit(500)]);
+            const orders = ordersRes.data;
+            if (orders.length === 0) return { success: true, data: [] };
             const grouped = new Map<string, { total: number; completed: number }>();
             for (const o of orders) {
                 const key = (o as any).processing_type || 'UNKNOWN';
@@ -161,11 +181,12 @@ export class ReportingService {
     async getBuyerPerformance(companyId: string = DEFAULT_COMPANY_ID): Promise<ApiResponse<BuyerPerformanceRow[]>> {
         try {
             const [buyersRes, contractsRes] = await Promise.all([
-                dbList(COLLECTIONS.BUYERS, [Query.equal('company_id', companyId), Query.equal('is_active', true)]),
-                dbList(COLLECTIONS.SALES_CONTRACTS, [Query.equal('company_id', companyId)])
+                safeDbList(COLLECTIONS.BUYERS, [Query.equal('company_id', companyId), Query.limit(500)]),
+                safeDbList(COLLECTIONS.SALES_CONTRACTS, [Query.equal('company_id', companyId), Query.limit(500)])
             ]);
-            const buyers = buyersRes.data || [];
-            const contracts = contractsRes.data || [];
+            // Filter is_active in code
+            const buyers = buyersRes.data.filter((b: any) => b.is_active !== false);
+            const contracts = contractsRes.data;
             const rows: BuyerPerformanceRow[] = buyers.map((b: any) => {
                 const bc = contracts.filter((c: any) => c.buyer_id === b.$id);
                 const totalContractedMT = bc.reduce((s: number, c: any) => s + Number(c.contracted_quantity || 0), 0);

@@ -162,7 +162,7 @@ const COLS = [
     },
     {
         id: 'audit_logs', name: 'Audit Logs', a: [
-            ['s', 'action', 100, 1], ['s', 'details', 2000, 1], ['s', 'user_id', 100, 1],
+            ['s', 'company_id', 50, 1], ['s', 'action', 100, 1], ['s', 'details', 2000, 1], ['s', 'user_id', 100, 1],
             ['s', 'user_role', 50, 1], ['s', 'ip_hash', 100]]
     },
     {

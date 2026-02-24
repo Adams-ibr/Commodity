@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Shipment, ShipmentStatus, SalesContract, Buyer, DocumentType } from '../types_commodity';
-import { Ship, Anchor, Search, Plus, FileText, Download, Loader2 } from 'lucide-react';
+import { Ship, Anchor, Search, Plus, FileText, Download, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { UserRole } from '../types_commodity';
 import { api } from '../services/api';
+
+const ITEMS_PER_PAGE = 25;
 
 interface ShipmentManagerProps {
     userRole: UserRole;
@@ -19,22 +21,27 @@ export const ShipmentManager: React.FC<ShipmentManagerProps> = ({
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [isGenerating, setIsGenerating] = useState<string | null>(null);
+    const [page, setPage] = useState(1);
+    const [totalRecords, setTotalRecords] = useState(0);
 
     useEffect(() => {
         loadData();
-    }, []);
+    }, [page]);
 
     const loadData = async () => {
         setIsLoading(true);
         try {
             const [shipmentsRes, contractsRes, buyersRes] = await Promise.all([
-                api.sales.getShipments(),
-                api.sales.getSalesContracts(),
+                api.sales.getShipments({ page, limit: ITEMS_PER_PAGE }),
+                api.sales.getSalesContracts({ page: 1, limit: 500 }),
                 api.sales.getBuyers()
             ]);
 
-            if (shipmentsRes.success && shipmentsRes.data) setShipments(shipmentsRes.data);
-            if (contractsRes.success && contractsRes.data) setContracts(contractsRes.data);
+            if (shipmentsRes.success && shipmentsRes.data) {
+                setShipments(shipmentsRes.data.data);
+                setTotalRecords(shipmentsRes.data.total);
+            }
+            if (contractsRes.success && contractsRes.data) setContracts(contractsRes.data.data);
             if (buyersRes.success && buyersRes.data) setBuyers(buyersRes.data);
         } catch (error) {
             console.error(error);
@@ -42,6 +49,8 @@ export const ShipmentManager: React.FC<ShipmentManagerProps> = ({
             setIsLoading(false);
         }
     };
+
+    const totalPages = Math.max(1, Math.ceil(totalRecords / ITEMS_PER_PAGE));
 
     const handleGenerateWaybill = async (shipment: Shipment) => {
         const contract = contracts.find(c => c.id === shipment.salesContractId);
@@ -211,6 +220,31 @@ export const ShipmentManager: React.FC<ShipmentManagerProps> = ({
                             )}
                         </tbody>
                     </table>
+                </div>
+                {/* Pagination */}
+                <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50/50">
+                    <span className="text-sm text-slate-600">
+                        Showing {Math.min((page - 1) * ITEMS_PER_PAGE + 1, totalRecords)}–{Math.min(page * ITEMS_PER_PAGE, totalRecords)} of {totalRecords}
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                            disabled={page <= 1}
+                            className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-sm font-medium text-slate-700 min-w-[80px] text-center">
+                            Page {page} of {totalPages}
+                        </span>
+                        <button
+                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                            disabled={page >= totalPages}
+                            className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

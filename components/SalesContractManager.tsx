@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { SalesContract, ContractStatus, Buyer, CommodityType, DocumentType } from '../types_commodity';
-import { FileText, Plus, Search, MapPin, Calendar, Receipt, Download, Loader2 } from 'lucide-react';
+import { FileText, Plus, Search, MapPin, Calendar, Receipt, Download, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { UserRole } from '../types_commodity';
 import { api } from '../services/api';
 import { SalesContractForm } from './SalesContractForm';
+
+const ITEMS_PER_PAGE = 25;
 
 interface SalesContractManagerProps {
     userRole: UserRole;
@@ -22,21 +24,26 @@ export const SalesContractManager: React.FC<SalesContractManagerProps> = ({
     const [isGenerating, setIsGenerating] = useState<string | null>(null);
     const [showForm, setShowForm] = useState(false);
     const [selectedContract, setSelectedContract] = useState<SalesContract | undefined>();
+    const [page, setPage] = useState(1);
+    const [totalRecords, setTotalRecords] = useState(0);
 
     useEffect(() => {
         loadData();
-    }, []);
+    }, [page]);
 
     const loadData = async () => {
         setIsLoading(true);
         try {
             const [contractsRes, buyersRes, latestCommTypes] = await Promise.all([
-                api.sales.getSalesContracts(),
+                api.sales.getSalesContracts({ page, limit: ITEMS_PER_PAGE }),
                 api.sales.getBuyers(),
                 api.commodityMaster.getCommodityTypes()
             ]);
 
-            if (contractsRes.success && contractsRes.data) setContracts(contractsRes.data);
+            if (contractsRes.success && contractsRes.data) {
+                setContracts(contractsRes.data.data);
+                setTotalRecords(contractsRes.data.total);
+            }
             if (buyersRes.success && buyersRes.data) setBuyers(buyersRes.data);
             setCommodityTypes(latestCommTypes || []);
         } catch (error) {
@@ -45,6 +52,8 @@ export const SalesContractManager: React.FC<SalesContractManagerProps> = ({
             setIsLoading(false);
         }
     };
+
+    const totalPages = Math.max(1, Math.ceil(totalRecords / ITEMS_PER_PAGE));
 
     const handleSaveContract = async (contractData: any) => {
         setIsLoading(true);
@@ -275,6 +284,31 @@ export const SalesContractManager: React.FC<SalesContractManagerProps> = ({
                             ))}
                         </tbody>
                     </table>
+                </div>
+                {/* Pagination */}
+                <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50/50">
+                    <span className="text-sm text-slate-600">
+                        Showing {Math.min((page - 1) * ITEMS_PER_PAGE + 1, totalRecords)}–{Math.min(page * ITEMS_PER_PAGE, totalRecords)} of {totalRecords}
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                            disabled={page <= 1}
+                            className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-sm font-medium text-slate-700 min-w-[80px] text-center">
+                            Page {page} of {totalPages}
+                        </span>
+                        <button
+                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                            disabled={page >= totalPages}
+                            className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

@@ -45,10 +45,17 @@ export class SalesService {
         } catch (error) { return { success: false, error: 'Failed to create buyer' }; }
     }
 
-    async getSalesContracts(companyId: string = DEFAULT_COMPANY_ID): Promise<ApiResponse<SalesContract[]>> {
+    async getSalesContracts(
+        params: { companyId?: string; page?: number; limit?: number } = {}
+    ): Promise<ApiResponse<{ data: SalesContract[]; total: number }>> {
+        const { companyId = DEFAULT_COMPANY_ID, page = 1, limit = 100 } = params;
+        const offset = (page - 1) * limit;
         try {
-            const { data, error } = await dbList(COLLECTIONS.SALES_CONTRACTS, [
-                Query.equal('company_id', companyId), Query.orderDesc('$createdAt')
+            const { data, total, error } = await dbList(COLLECTIONS.SALES_CONTRACTS, [
+                Query.equal('company_id', companyId),
+                Query.orderDesc('$createdAt'),
+                Query.limit(limit),
+                Query.offset(offset)
             ]);
             if (error) return { success: false, error };
             const contracts: SalesContract[] = (data || []).map((item: any) => ({
@@ -66,7 +73,7 @@ export class SalesService {
                 status: item.status as ContractStatus,
                 createdBy: item.created_by || '', createdAt: item.$createdAt
             }));
-            return { success: true, data: contracts };
+            return { success: true, data: { data: contracts, total: total || 0 } };
         } catch (error) { return { success: false, error: 'Failed to fetch sales contracts' }; }
     }
 
@@ -102,10 +109,17 @@ export class SalesService {
         } catch (error) { return { success: false, error: 'Failed to update contract status' }; }
     }
 
-    async getShipments(companyId: string = DEFAULT_COMPANY_ID): Promise<ApiResponse<Shipment[]>> {
+    async getShipments(
+        params: { companyId?: string; page?: number; limit?: number } = {}
+    ): Promise<ApiResponse<{ data: Shipment[]; total: number }>> {
+        const { companyId = DEFAULT_COMPANY_ID, page = 1, limit = 100 } = params;
+        const offset = (page - 1) * limit;
         try {
-            const { data, error } = await dbList(COLLECTIONS.SHIPMENTS, [
-                Query.equal('company_id', companyId), Query.orderDesc('$createdAt')
+            const { data, total, error } = await dbList(COLLECTIONS.SHIPMENTS, [
+                Query.equal('company_id', companyId),
+                Query.orderDesc('$createdAt'),
+                Query.limit(limit),
+                Query.offset(offset)
             ]);
             if (error) return { success: false, error };
             const shipments: Shipment[] = (data || []).map((item: any) => ({
@@ -122,7 +136,7 @@ export class SalesService {
                 status: item.status as ShipmentStatus,
                 createdBy: item.created_by || '', createdAt: item.$createdAt
             }));
-            return { success: true, data: shipments };
+            return { success: true, data: { data: shipments, total: total || 0 } };
         } catch (error) { return { success: false, error: 'Failed to fetch shipments' }; }
     }
 

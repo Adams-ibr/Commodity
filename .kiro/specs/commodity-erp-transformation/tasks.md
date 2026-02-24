@@ -162,7 +162,7 @@
   - Implement warehouse and batch inventory management UI
   - _Requirements: 1.1, 2.1, 3.1, 4.1, 5.1, 6.1_
 
-- [ ] 19. Sales and Export UI Components
+- [x] 19. Sales and Export UI Components
   - Create buyer management and sales contract interfaces
   - Implement shipment management and batch allocation screens
   - Add export documentation and invoice generation UI
@@ -171,7 +171,7 @@
   - Add export workflow management and approval processes
   - _Requirements: 7.1, 7.2, 7.3, 10.1, 10.4_
 
-- [ ] 20. Financial Management Interface
+- [x] 20. Financial Management Interface
   - Create chart of accounts management interface
   - Implement journal entry creation and approval screens
   - Add accounts payable and receivable management UI

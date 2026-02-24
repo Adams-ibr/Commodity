@@ -29,6 +29,8 @@ import { ComplianceService } from './complianceService';
 import { ReportingService } from './reportingService';
 import { authService } from './authService';
 
+const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';
+
 export const api = {
     auth: authService,
     commodityMaster: new CommodityMasterService(),
@@ -45,9 +47,10 @@ export const api = {
     reporting: new ReportingService(),
 
     audit: {
-        async log(action: string, details: string, user: string, role: string) {
+        async log(action: string, details: string, user: string, role: string, companyId: string = DEFAULT_COMPANY_ID) {
             try {
                 await dbCreate(COLLECTIONS.AUDIT_LOGS, {
+                    company_id: companyId,
                     action,
                     details,
                     user_id: user,
@@ -59,8 +62,9 @@ export const api = {
             }
         },
 
-        async getAll(): Promise<AuditLogEntry[]> {
+        async getAll(companyId: string = DEFAULT_COMPANY_ID): Promise<AuditLogEntry[]> {
             const { data } = await dbList(COLLECTIONS.AUDIT_LOGS, [
+                Query.equal('company_id', companyId),
                 Query.orderDesc('$createdAt'),
                 Query.limit(100)
             ]);
@@ -75,12 +79,13 @@ export const api = {
             }));
         },
 
-        async getLogs(date: string, page: number = 1, limit: number = 50): Promise<{ data: AuditLogEntry[], count: number }> {
+        async getLogs(date: string, page: number = 1, limit: number = 50, companyId: string = DEFAULT_COMPANY_ID): Promise<{ data: AuditLogEntry[], count: number }> {
             const startOfDay = `${date}T00:00:00.000Z`;
             const endOfDay = `${date}T23:59:59.999Z`;
             const offset = (page - 1) * limit;
 
             const { data, total } = await dbList(COLLECTIONS.AUDIT_LOGS, [
+                Query.equal('company_id', companyId),
                 Query.greaterThanEqual('$createdAt', startOfDay),
                 Query.lessThanEqual('$createdAt', endOfDay),
                 Query.orderDesc('$createdAt'),
@@ -101,10 +106,15 @@ export const api = {
             return { data: logs, count: total || 0 };
         },
 
-        async search(params: { query?: string; action?: string; date?: string; page?: number; limit?: number }): Promise<{ data: AuditLogEntry[], count: number }> {
-            const { query, action, date, page = 1, limit = 50 } = params;
+        async search(params: { query?: string; action?: string; date?: string; page?: number; limit?: number; companyId?: string }): Promise<{ data: AuditLogEntry[], count: number }> {
+            const { query, action, date, page = 1, limit = 50, companyId = DEFAULT_COMPANY_ID } = params;
             const offset = (page - 1) * limit;
-            const queries: string[] = [Query.orderDesc('$createdAt'), Query.limit(limit), Query.offset(offset)];
+            const queries: string[] = [
+                Query.equal('company_id', companyId),
+                Query.orderDesc('$createdAt'),
+                Query.limit(limit),
+                Query.offset(offset)
+            ];
 
             if (date) {
                 queries.push(Query.greaterThanEqual('$createdAt', `${date}T00:00:00.000Z`));

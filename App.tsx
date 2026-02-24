@@ -171,7 +171,10 @@ function App() {
       `}>
         <div className="flex items-center justify-between p-6 border-b border-indigo-800">
           <div className="flex items-center justify-center flex-1">
-            <h2 className="text-xl font-bold tracking-wider">GALALTIX</h2>
+            <div className="flex flex-col items-center">
+              <img src="/logo.png" alt="Galaltix Nigeria Limited" className="h-14 w-auto" />
+              <span className="text-[10px] text-indigo-300/70 tracking-widest uppercase mt-1">Commodity ERP</span>
+            </div>
           </div>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-indigo-300">
             <X className="w-6 h-6" />

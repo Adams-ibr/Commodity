@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { PackageSearch, ArrowRightLeft, MapPin, Search, Layers, ShieldCheck } from 'lucide-react';
+import { PackageSearch, ArrowRightLeft, MapPin, Search, Layers, ShieldCheck, ChevronLeft, ChevronRight } from 'lucide-react';
 import { CommodityBatch, BatchStatus, Location } from '../types_commodity';
 import { UserRole } from '../types_commodity';
 import { api } from '../services/api';
 import { BatchMovementForm } from './BatchMovementForm';
+
+const ITEMS_PER_PAGE = 25;
 
 interface WarehouseManagerProps {
     userRole: UserRole;
@@ -25,20 +27,24 @@ export const WarehouseManager: React.FC<WarehouseManagerProps> = ({
     const [selectedBatch, setSelectedBatch] = useState<CommodityBatch | undefined>(undefined);
     const [isSubmitting, setIsSubmitting] = useState(false);
 
+    const [page, setPage] = useState(1);
+    const [totalRecords, setTotalRecords] = useState(0);
+
     useEffect(() => {
         loadData();
-    }, []);
+    }, [page]);
 
     const loadData = async () => {
         setIsLoading(true);
         try {
             const [batchesRes, locationsData] = await Promise.all([
-                api.warehouse.getInventory(),
+                api.warehouse.getInventory({ page, limit: ITEMS_PER_PAGE }),
                 api.locations.getAll()
             ]);
 
             if (batchesRes.success && batchesRes.data) {
-                setBatches(batchesRes.data);
+                setBatches(batchesRes.data.data);
+                setTotalRecords(batchesRes.data.total);
             }
             setLocations(locationsData || []);
         } catch (error) {
@@ -47,6 +53,8 @@ export const WarehouseManager: React.FC<WarehouseManagerProps> = ({
             setIsLoading(false);
         }
     };
+
+    const totalPages = Math.max(1, Math.ceil(totalRecords / ITEMS_PER_PAGE));
 
     const filteredBatches = useMemo(() => {
         return batches.filter(batch => {
@@ -75,8 +83,7 @@ export const WarehouseManager: React.FC<WarehouseManagerProps> = ({
                 }
 
                 alert(`Success! Scheduled transfer of ${movementData.quantity} MT. In production, this deducts from the source batch and spawns a new allocation.`);
-                // Note: For full accuracy the UI should refetch or manually adjust the local state
-                await loadData(); // Easiest way to get fresh numbers assuming RPC works
+                await loadData();
             } else {
                 alert(res.error || 'Failed to process transfer');
             }
@@ -196,6 +203,31 @@ export const WarehouseManager: React.FC<WarehouseManagerProps> = ({
                             )}
                         </tbody>
                     </table>
+                </div>
+                {/* Pagination */}
+                <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50/50">
+                    <span className="text-sm text-slate-600">
+                        Showing {Math.min((page - 1) * ITEMS_PER_PAGE + 1, totalRecords)}–{Math.min(page * ITEMS_PER_PAGE, totalRecords)} of {totalRecords}
+                    </span>
+                    <div className="flex items-center gap-2">
+                        <button
+                            onClick={() => setPage(p => Math.max(1, p - 1))}
+                            disabled={page <= 1}
+                            className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+                        <span className="text-sm font-medium text-slate-700 min-w-[80px] text-center">
+                            Page {page} of {totalPages}
+                        </span>
+                        <button
+                            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                            disabled={page >= totalPages}
+                            className="p-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
             </div>
 
