@@ -53,6 +53,7 @@ import { TradeFinanceManager } from './components/TradeFinanceManager';
 import { ComplianceManager } from './components/ComplianceManager';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { AuditTrailManager } from './components/AuditTrailManager';
+import { CommodityMasterManager } from './components/CommodityMasterManager';
 import { UserManagement } from './components/UserManagement';
 import { CacheStatus } from './components/CacheStatus';
 import { OfflineStatus } from './components/OfflineStatus';
@@ -146,6 +147,8 @@ function App() {
         return <ComplianceManager onAuditLog={addAuditLog} />;
       case 'audit':
         return <AuditTrailManager />;
+      case 'commodities':
+        return <CommodityMasterManager userRole={currentUser.role} onAuditLog={addAuditLog} />;
       default:
         return <div className="text-center p-10 text-slate-500">Module under construction</div>;
     }
@@ -198,6 +201,7 @@ function App() {
             <p className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Procurement</p>
             <NavItem id="suppliers" label="Supplier Directory" icon={Building} />
             <NavItem id="contracts" label="Purchase Contracts" icon={FileText} />
+            <NavItem id="commodities" label="Commodity Master" icon={Package} />
             <NavItem id="quality" label="Quality Control" icon={Microscope} />
             <NavItem id="processing" label="Processing Module" icon={Factory} />
           </div>
