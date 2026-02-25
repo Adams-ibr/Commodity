@@ -34,7 +34,7 @@ export const SalesContractManager: React.FC<SalesContractManagerProps> = ({
     const loadData = async () => {
         setIsLoading(true);
         try {
-            const [contractsRes, buyersRes, latestCommTypes] = await Promise.all([
+            const [contractsRes, buyersRes, commTypesRes] = await Promise.all([
                 api.sales.getSalesContracts({ page, limit: ITEMS_PER_PAGE }),
                 api.sales.getBuyers(),
                 api.commodityMaster.getCommodityTypes()
@@ -45,7 +45,11 @@ export const SalesContractManager: React.FC<SalesContractManagerProps> = ({
                 setTotalRecords(contractsRes.data.total);
             }
             if (buyersRes.success && buyersRes.data) setBuyers(buyersRes.data);
-            setCommodityTypes(latestCommTypes || []);
+            if (commTypesRes.success && commTypesRes.data) {
+                setCommodityTypes(commTypesRes.data);
+            } else {
+                setCommodityTypes([]);
+            }
         } catch (error) {
             console.error(error);
         } finally {
