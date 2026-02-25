@@ -45,6 +45,27 @@ export class SalesService {
         } catch (error) { return { success: false, error: 'Failed to create buyer' }; }
     }
 
+    async updateBuyer(id: string, buyerData: Partial<Buyer>): Promise<ApiResponse<Buyer>> {
+        try {
+            const payload: any = {};
+            if (buyerData.name !== undefined) payload.name = buyerData.name;
+            if (buyerData.type !== undefined) payload.type = buyerData.type;
+            if (buyerData.country !== undefined) payload.country = buyerData.country;
+            if (buyerData.registrationNumber !== undefined) payload.registration_number = buyerData.registrationNumber;
+            if (buyerData.contactPerson !== undefined) payload.contact_person = buyerData.contactPerson;
+            if (buyerData.email !== undefined) payload.email = buyerData.email;
+            if (buyerData.phone !== undefined) payload.phone = buyerData.phone;
+            if (buyerData.address !== undefined) payload.address = typeof buyerData.address === 'string' ? buyerData.address : JSON.stringify(buyerData.address);
+            if (buyerData.creditLimit !== undefined) payload.credit_limit = buyerData.creditLimit;
+            if (buyerData.paymentTerms !== undefined) payload.payment_terms = buyerData.paymentTerms;
+            if (buyerData.preferredCurrency !== undefined) payload.preferred_currency = buyerData.preferredCurrency;
+
+            const { data, error } = await dbUpdate(COLLECTIONS.BUYERS, id, payload);
+            if (error || !data) return { success: false, error: error || 'Failed' };
+            return { success: true, data: { ...buyerData, id: data.$id, createdAt: data.$createdAt, updatedAt: data.$updatedAt } as Buyer };
+        } catch (error) { return { success: false, error: 'Failed to update buyer' }; }
+    }
+
     async getSalesContracts(
         params: { companyId?: string; page?: number; limit?: number } = {}
     ): Promise<ApiResponse<{ data: SalesContract[]; total: number }>> {

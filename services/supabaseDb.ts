@@ -94,6 +94,18 @@ export interface DbListResponse<T> {
     error: string | null;
 }
 
+// ──── Column name mapping (Appwrite → Supabase) ────
+// Services use Appwrite system field names like $createdAt, $updatedAt, $id.
+// Map them to Supabase PostgreSQL column names.
+function mapColumn(col: string): string {
+    const MAP: Record<string, string> = {
+        '$id': 'id',
+        '$createdAt': 'created_at',
+        '$updatedAt': 'updated_at',
+    };
+    return MAP[col] || col;
+}
+
 // ──── Apply parsed queries to a Supabase query builder ────
 function applyQueries(
     queryBuilder: any,
@@ -106,7 +118,7 @@ function applyQueries(
         let q: ParsedQuery;
         try { q = decodeQuery(qStr); } catch { continue; }
 
-        const attr = q.attribute || '';
+        const attr = mapColumn(q.attribute || '');
         const val = q.values?.[0];
 
         switch (q.method) {
@@ -178,7 +190,7 @@ export async function dbList<T = any>(
         for (const qStr of queries) {
             let q: ParsedQuery;
             try { q = decodeQuery(qStr); } catch { continue; }
-            const attr = q.attribute || '';
+            const attr = mapColumn(q.attribute || '');
             const val = q.values?.[0];
             switch (q.method) {
                 case 'equal':
