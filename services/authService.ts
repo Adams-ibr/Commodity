@@ -127,10 +127,27 @@ async function updateUserProfile(userId: string, updates: Partial<User>): Promis
     return !error;
 }
 
+async function resetUserPassword(authId: string, newPassword: string): Promise<boolean> {
+    try {
+        const { error } = await supabase.auth.admin.updateUserById(authId, {
+            password: newPassword
+        });
+        if (error) {
+            console.error('Error resetting password:', error.message);
+            return false;
+        }
+        return true;
+    } catch (err) {
+        console.error('Password reset failed:', err);
+        return false;
+    }
+}
+
 export const authService = {
     signIn,
     signUp,
     signOut,
     getCurrentUser,
     updateUserProfile,
+    resetUserPassword,
 };

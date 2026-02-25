@@ -215,14 +215,21 @@ export const api = {
                 email: u.email,
                 name: u.name,
                 role: u.role as UserRole,
+                department: u.department || '',
                 locationId: u.location_id || u.locationId,
-                isActive: u.is_active,
+                isActive: u.is_active !== false,
+                lastLogin: u.last_login || null,
+                authId: u.auth_id || null,
                 createdAt: u.$createdAt
             }));
         },
 
         async create(userData: any) {
-            const { data } = await dbCreate(COLLECTIONS.USERS, userData);
+            const payload: any = {
+                ...userData,
+                company_id: userData.company_id || DEFAULT_COMPANY_ID,
+            };
+            const { data } = await dbCreate(COLLECTIONS.USERS, payload);
             return data ? { ...data, id: data.$id } : null;
         },
 
@@ -231,6 +238,7 @@ export const api = {
             if (updates.name) payload.name = updates.name;
             if (updates.role) payload.role = updates.role;
             if (updates.locationId) payload.location_id = updates.locationId;
+            if (updates.department !== undefined) payload.department = updates.department;
             const { data } = await dbUpdate(COLLECTIONS.USERS, id, payload);
             if (!data) return null;
             return {
@@ -238,8 +246,11 @@ export const api = {
                 email: data.email,
                 name: data.name,
                 role: data.role as UserRole,
+                department: data.department || '',
                 locationId: data.location_id,
-                isActive: data.is_active,
+                isActive: data.is_active !== false,
+                lastLogin: data.last_login || null,
+                authId: data.auth_id || null,
                 createdAt: data.$createdAt
             };
         },
@@ -252,6 +263,21 @@ export const api = {
         async delete(id: string) {
             const { success } = await dbDelete(COLLECTIONS.USERS, id);
             return success;
+        },
+
+        async resetPassword(authId: string, newPassword: string) {
+            return authService.resetUserPassword(authId, newPassword);
+        },
+
+        async getStats(users: any[]) {
+            const total = users.length;
+            const active = users.filter((u: any) => u.isActive !== false).length;
+            const disabled = total - active;
+            const byRole: Record<string, number> = {};
+            users.forEach((u: any) => {
+                byRole[u.role] = (byRole[u.role] || 0) + 1;
+            });
+            return { total, active, disabled, byRole };
         }
     }
 };
