@@ -9,11 +9,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "appwrite": "^22.4.1",
+    "@supabase/supabase-js": "^2.97.0",
     "jspdf": "^4.1.0",
     "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.562.0",
-    "node-appwrite": "^22.1.2",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
     "recharts": "^3.6.0",

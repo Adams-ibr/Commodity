@@ -1,8 +1,8 @@
 // =====================================================
-// PROCUREMENT SERVICE — APPWRITE
+// PROCUREMENT SERVICE — SUPABASE
 // =====================================================
-import { dbList, dbGet, dbCreate, dbUpdate, Query } from './appwriteDb';
-import { COLLECTIONS } from './appwriteConfig';
+import { dbList, dbGet, dbCreate, dbUpdate, Query } from './supabaseDb';
+import { COLLECTIONS } from './supabaseDb';
 import {
   Supplier, SupplierType, PurchaseContract, ContractStatus,
   ValidationResult, ValidationError, ApiResponse, BankDetails, TaxInfo

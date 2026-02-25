@@ -1,8 +1,8 @@
 // =====================================================
-// REPORTING SERVICE — APPWRITE
+// REPORTING SERVICE — SUPABASE
 // =====================================================
-import { dbList, Query } from './appwriteDb';
-import { COLLECTIONS } from './appwriteConfig';
+import { dbList, Query } from './supabaseDb';
+import { COLLECTIONS } from './supabaseDb';
 import { ApiResponse } from '../types_commodity';
 
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';

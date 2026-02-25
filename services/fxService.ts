@@ -1,8 +1,8 @@
 // =====================================================
-// FX SERVICE — APPWRITE
+// FX SERVICE — SUPABASE
 // =====================================================
-import { dbList, dbCreate, dbUpdate, Query } from './appwriteDb';
-import { COLLECTIONS } from './appwriteConfig';
+import { dbList, dbCreate, dbUpdate, Query } from './supabaseDb';
+import { COLLECTIONS } from './supabaseDb';
 import { ExchangeRate, ApiResponse } from '../types_commodity';
 
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';

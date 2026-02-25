@@ -1,5 +1,5 @@
 // =====================================================
-// API REGISTRY — APPWRITE
+// API REGISTRY — SUPABASE
 // =====================================================
 
 export interface AuditLogEntry {
@@ -12,8 +12,8 @@ export interface AuditLogEntry {
     ipHash?: string;
 }
 
-import { dbList, dbCreate, dbUpdate, dbDelete, Query, ID } from './appwriteDb';
-import { COLLECTIONS } from './appwriteConfig';
+import { dbList, dbCreate, dbUpdate, dbDelete, Query, ID } from './supabaseDb';
+import { COLLECTIONS } from './supabaseDb';
 import { UserRole, Location } from '../types_commodity';
 import { ProcurementService } from './procurementService';
 import { CommodityMasterService } from './commodityMasterService';

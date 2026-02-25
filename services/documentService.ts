@@ -1,8 +1,8 @@
 // =====================================================
-// DOCUMENT SERVICE — APPWRITE (Enhanced for Task 16)
+// DOCUMENT SERVICE — SUPABASE
 // =====================================================
-import { dbList, dbGet, dbCreate, dbUpdate, dbDelete, Query } from './appwriteDb';
-import { COLLECTIONS } from './appwriteConfig';
+import { dbList, dbGet, dbCreate, dbUpdate, dbDelete, Query } from './supabaseDb';
+import { COLLECTIONS } from './supabaseDb';
 import { ApiResponse, SalesContract, Buyer, Shipment, DocumentType } from '../types_commodity';
 
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';
@@ -62,7 +62,7 @@ export class DocumentService {
 
             let docs = (data || []).map(mapDoc);
 
-            // Client-side text search (Appwrite doesn't have LIKE queries on free tier)
+            // Client-side text search for filtering
             if (params.query) {
                 const q = params.query.toLowerCase();
                 docs = docs.filter(d =>
