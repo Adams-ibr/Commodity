@@ -8,17 +8,23 @@ import { ApiResponse } from '../types_commodity';
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';
 
 export type InvoiceStatus = 'DRAFT' | 'SENT' | 'PAID' | 'OVERDUE' | 'CANCELLED';
+export type InvoiceType = 'SALES' | 'PURCHASE';
 
 export interface Invoice {
     id: string;
     companyId: string;
+    type: InvoiceType;
     invoiceNumber: string;
     buyerId?: string;
-    buyerName: string;
+    buyerName?: string;
     buyerEmail?: string;
     buyerAddress?: string;
+    supplierId?: string;
+    supplierName?: string;
     salesContractId?: string;
     salesContractNumber?: string;
+    purchaseContractId?: string;
+    purchaseContractNumber?: string;
     invoiceDate: string;
     dueDate: string;
     items: InvoiceItem[];
@@ -47,9 +53,9 @@ export interface InvoiceItem {
 
 export class InvoiceService {
     async getInvoices(
-        params: { companyId?: string; page?: number; limit?: number; status?: InvoiceStatus } = {}
+        params: { companyId?: string; page?: number; limit?: number; status?: InvoiceStatus; type?: InvoiceType; contractId?: string } = {}
     ): Promise<ApiResponse<{ data: Invoice[]; total: number }>> {
-        const { companyId = DEFAULT_COMPANY_ID, page = 1, limit = 100, status } = params;
+        const { companyId = DEFAULT_COMPANY_ID, page = 1, limit = 100, status, type, contractId } = params;
         const offset = (page - 1) * limit;
         try {
             const queries = [
@@ -59,19 +65,31 @@ export class InvoiceService {
                 Query.offset(offset)
             ];
             if (status) queries.push(Query.equal('status', status));
+            if (type) queries.push(Query.equal('type', type));
+            if (contractId) {
+                // Check both sales and purchase contract fields
+                // Note: Standard dbList doesn't support OR yet, so we filter by one or the other if specific type is known
+                if (type === 'SALES') queries.push(Query.equal('sales_contract_id', contractId));
+                else if (type === 'PURCHASE') queries.push(Query.equal('purchase_contract_id', contractId));
+            }
 
             const { data, total, error } = await dbList(COLLECTIONS.INVOICES, queries);
             if (error) return { success: false, error };
             const invoices: Invoice[] = (data || []).map((item: any) => ({
                 id: item.$id,
                 companyId: item.company_id,
+                type: (item.type || 'SALES') as InvoiceType,
                 invoiceNumber: item.invoice_number,
                 buyerId: item.buyer_id || '',
                 buyerName: item.buyer_name || '',
                 buyerEmail: item.buyer_email || '',
                 buyerAddress: item.buyer_address || '',
+                supplierId: item.supplier_id || '',
+                supplierName: item.supplier_name || '',
                 salesContractId: item.sales_contract_id || '',
                 salesContractNumber: item.sales_contract_number || '',
+                purchaseContractId: item.purchase_contract_id || '',
+                purchaseContractNumber: item.purchase_contract_number || '',
                 invoiceDate: item.invoice_date,
                 dueDate: item.due_date,
                 items: item.items ? (typeof item.items === 'string' ? JSON.parse(item.items) : item.items) : [],
@@ -84,7 +102,7 @@ export class InvoiceService {
                 balanceDue: Number(item.balance_due || 0),
                 currency: item.currency || 'USD',
                 notes: item.notes || '',
-                paymentTerms: item.payment_terms || '',
+                payment_terms: item.payment_terms || '',
                 status: item.status as InvoiceStatus,
                 paidAt: item.paid_at || null,
                 createdBy: item.created_by || '',
@@ -101,13 +119,18 @@ export class InvoiceService {
         try {
             const { data, error } = await dbCreate(COLLECTIONS.INVOICES, {
                 company_id: companyId,
+                type: invoiceData.type || 'SALES',
                 invoice_number: invoiceData.invoiceNumber,
                 buyer_id: invoiceData.buyerId || '',
-                buyer_name: invoiceData.buyerName,
+                buyer_name: invoiceData.buyerName || '',
                 buyer_email: invoiceData.buyerEmail || '',
                 buyer_address: invoiceData.buyerAddress || '',
+                supplier_id: invoiceData.supplierId || '',
+                supplier_name: invoiceData.supplierName || '',
                 sales_contract_id: invoiceData.salesContractId || '',
                 sales_contract_number: invoiceData.salesContractNumber || '',
+                purchase_contract_id: invoiceData.purchaseContractId || '',
+                purchase_contract_number: invoiceData.purchaseContractNumber || '',
                 invoice_date: invoiceData.invoiceDate,
                 due_date: invoiceData.dueDate,
                 items: JSON.stringify(invoiceData.items),

@@ -5,16 +5,21 @@
 CREATE TABLE IF NOT EXISTS invoices (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   company_id UUID REFERENCES companies(id),
+  type TEXT NOT NULL DEFAULT 'SALES', -- 'SALES' or 'PURCHASE'
   invoice_number TEXT UNIQUE NOT NULL,
-  buyer_id UUID, -- Optional link to buyers table
-  buyer_name TEXT NOT NULL,
+  buyer_id UUID,
+  buyer_name TEXT,
   buyer_email TEXT,
   buyer_address TEXT,
+  supplier_id UUID,
+  supplier_name TEXT,
   sales_contract_id UUID REFERENCES sales_contracts(id),
   sales_contract_number TEXT,
+  purchase_contract_id UUID REFERENCES purchase_contracts(id),
+  purchase_contract_number TEXT,
   invoice_date DATE NOT NULL,
   due_date DATE NOT NULL,
-  items JSONB NOT NULL, -- Array of InvoiceItem
+  items JSONB NOT NULL,
   subtotal DECIMAL(15,2) NOT NULL DEFAULT 0,
   tax_rate DECIMAL(5,2) DEFAULT 0,
   tax_amount DECIMAL(15,2) DEFAULT 0,
@@ -25,7 +30,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   currency TEXT DEFAULT 'USD',
   notes TEXT,
   payment_terms TEXT,
-  status TEXT DEFAULT 'DRAFT', -- 'DRAFT', 'SENT', 'PAID', 'OVERDUE', 'CANCELLED'
+  status TEXT DEFAULT 'DRAFT',
   paid_at TIMESTAMPTZ,
   created_by TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),

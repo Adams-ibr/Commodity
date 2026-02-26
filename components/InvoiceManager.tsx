@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { UserRole } from '../types_commodity';
 import { api } from '../services/api';
-import { Invoice, InvoiceItem, InvoiceStatus } from '../services/invoiceService';
+import { Invoice, InvoiceItem, InvoiceStatus, InvoiceType } from '../services/invoiceService';
 import {
     FileText, Plus, Search, X, Check, AlertCircle, DollarSign,
     ChevronLeft, ChevronRight, Download, Send, Eye, Clock,
-    CheckCircle, XCircle, Printer, CreditCard, Receipt
+    CheckCircle, XCircle, Printer, CreditCard, Receipt, Repeat,
+    User, Building, ShoppingCart, ArrowLeftRight
 } from 'lucide-react';
 
 interface InvoiceManagerProps {
@@ -28,6 +29,7 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
     const [isLoading, setIsLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState<InvoiceStatus | 'all'>('all');
+    const [typeFilter, setTypeFilter] = useState<InvoiceType | 'all'>('all');
     const [page, setPage] = useState(1);
     const [totalRecords, setTotalRecords] = useState(0);
     const [showForm, setShowForm] = useState(false);
@@ -38,10 +40,13 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
 
     // Form state
     const [formData, setFormData] = useState({
+        type: 'SALES' as InvoiceType,
         buyerName: '',
         buyerEmail: '',
         buyerAddress: '',
+        supplierName: '',
         salesContractNumber: '',
+        purchaseContractNumber: '',
         invoiceDate: new Date().toISOString().slice(0, 10),
         dueDate: '',
         currency: 'USD',
@@ -54,15 +59,16 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
         { description: '', quantity: 1, unitPrice: 0, amount: 0 }
     ]);
 
-    useEffect(() => { loadInvoices(); }, [page]);
-    useEffect(() => { setPage(1); }, [statusFilter]);
+    useEffect(() => { loadInvoices(); }, [page, typeFilter]);
+    useEffect(() => { setPage(1); }, [statusFilter, typeFilter]);
 
     const loadInvoices = async () => {
         setIsLoading(true);
         try {
             const res = await api.invoices.getInvoices({
                 page, limit: ITEMS_PER_PAGE,
-                status: statusFilter !== 'all' ? statusFilter : undefined
+                status: statusFilter !== 'all' ? statusFilter : undefined,
+                type: typeFilter !== 'all' ? typeFilter : undefined
             });
             if (res.success && res.data) {
                 setInvoices(res.data.data);
@@ -83,7 +89,8 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
         const q = searchTerm.toLowerCase();
         return invoices.filter(inv =>
             inv.invoiceNumber.toLowerCase().includes(q) ||
-            inv.buyerName.toLowerCase().includes(q)
+            inv.buyerName?.toLowerCase().includes(q) ||
+            inv.supplierName?.toLowerCase().includes(q)
         );
     }, [invoices, searchTerm]);
 
@@ -123,15 +130,18 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
             return;
         }
 
-        const invoiceNumber = `INV-${Date.now().toString().slice(-8)}`;
+        const invoiceNumber = `${formData.type === 'SALES' ? 'INV' : 'BILL'}-${Date.now().toString().slice(-8)}`;
         try {
             const res = await api.invoices.createInvoice({
                 companyId: '',
+                type: formData.type,
                 invoiceNumber,
-                buyerName: formData.buyerName,
+                buyerName: formData.type === 'SALES' ? formData.buyerName : undefined,
                 buyerEmail: formData.buyerEmail,
                 buyerAddress: formData.buyerAddress,
+                supplierName: formData.type === 'PURCHASE' ? formData.supplierName : undefined,
                 salesContractNumber: formData.salesContractNumber,
+                purchaseContractNumber: formData.purchaseContractNumber,
                 invoiceDate: formData.invoiceDate,
                 dueDate: formData.dueDate,
                 items,
@@ -149,8 +159,8 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
                 createdBy: 'system',
             });
             if (res.success) {
-                showMsg('success', `Invoice ${invoiceNumber} created`);
-                onAuditLog?.('INVOICE_CREATE', `Created invoice ${invoiceNumber} for ${formData.buyerName}`);
+                showMsg('success', `${formData.type === 'SALES' ? 'Invoice' : 'Bill'} ${invoiceNumber} created`);
+                onAuditLog?.('INVOICE_CREATE', `Created ${formData.type} ${invoiceNumber} for ${formData.type === 'SALES' ? formData.buyerName : formData.supplierName}`);
                 setShowForm(false);
                 resetForm();
                 loadInvoices();
@@ -162,7 +172,9 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
 
     const resetForm = () => {
         setFormData({
-            buyerName: '', buyerEmail: '', buyerAddress: '', salesContractNumber: '',
+            type: 'SALES',
+            buyerName: '', buyerEmail: '', buyerAddress: '', supplierName: '',
+            salesContractNumber: '', purchaseContractNumber: '',
             invoiceDate: new Date().toISOString().slice(0, 10), dueDate: '',
             currency: 'USD', taxRate: 0, discount: 0, notes: '', paymentTerms: 'Net 30'
         });
@@ -281,14 +293,23 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
                         type="text"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Search by invoice number or buyer…"
+                        placeholder="Search by number or entity…"
                         className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
                     />
                 </div>
                 <select
+                    value={typeFilter}
+                    onChange={(e) => setTypeFilter(e.target.value as any)}
+                    className="px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white min-w-[140px]"
+                >
+                    <option value="all">All Types</option>
+                    <option value="SALES">Sales (Receivable)</option>
+                    <option value="PURCHASE">Purchase (Payable)</option>
+                </select>
+                <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value as InvoiceStatus | 'all')}
-                    className="px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white min-w-[160px]"
+                    className="px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white min-w-[140px]"
                 >
                     <option value="all">All Status</option>
                     <option value="DRAFT">Draft</option>
@@ -309,7 +330,7 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
                     <div className="text-center py-20">
                         <Receipt className="w-16 h-16 text-slate-300 mx-auto mb-4" />
                         <h3 className="text-xl font-medium text-slate-700">No Invoices Found</h3>
-                        <p className="text-slate-500 mt-2">Create your first invoice to get started</p>
+                        <p className="text-slate-500 mt-2">Filter might be too restrictive or no data yet</p>
                     </div>
                 ) : (
                     <>
@@ -317,8 +338,9 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
                             <table className="min-w-full divide-y divide-slate-200">
                                 <thead className="bg-slate-50">
                                     <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Invoice</th>
-                                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Buyer</th>
+                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Type</th>
+                                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Document</th>
+                                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Entity</th>
                                         <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Date</th>
                                         <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Amount</th>
                                         <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Paid</th>
@@ -332,13 +354,21 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
                                         return (
                                             <tr key={inv.id} className="hover:bg-indigo-50/40 transition-colors">
                                                 <td className="px-6 py-4">
+                                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${inv.type === 'SALES' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                                                        {inv.type}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-4">
                                                     <div className="font-bold text-slate-800 text-sm">{inv.invoiceNumber}</div>
-                                                    {inv.salesContractNumber && (
-                                                        <div className="text-xs text-slate-500 mt-0.5">Contract: {inv.salesContractNumber}</div>
+                                                    {(inv.salesContractNumber || inv.purchaseContractNumber) && (
+                                                        <div className="text-xs text-slate-500 mt-0.5">Contract: {inv.salesContractNumber || inv.purchaseContractNumber}</div>
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-4">
-                                                    <div className="text-sm font-medium text-slate-800">{inv.buyerName}</div>
+                                                    <div className="text-sm font-medium text-slate-800 flex items-center gap-1">
+                                                        {inv.type === 'SALES' ? <User className="w-3 h-3 text-slate-400" /> : <Building className="w-3 h-3 text-slate-400" />}
+                                                        {inv.buyerName || inv.supplierName}
+                                                    </div>
                                                     {inv.buyerEmail && <div className="text-xs text-slate-500">{inv.buyerEmail}</div>}
                                                 </td>
                                                 <td className="px-4 py-4">
@@ -421,46 +451,59 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
                             </div>
                         </div>
                         <form onSubmit={handleCreate} className="p-6 space-y-5 overflow-y-auto flex-1">
-                            {/* Buyer Info */}
+                            {/* Type Selector */}
+                            <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
+                                <button type="button" onClick={() => setFormData({ ...formData, type: 'SALES' })}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${formData.type === 'SALES' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
+                                    <ShoppingCart className="w-4 h-4" /> Sales Invoice
+                                </button>
+                                <button type="button" onClick={() => setFormData({ ...formData, type: 'PURCHASE' })}
+                                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${formData.type === 'PURCHASE' ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>
+                                    <Repeat className="w-4 h-4" /> Purchase Bill
+                                </button>
+                            </div>
+
+                            {/* Entity Info */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {formData.type === 'SALES' ? (
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Buyer Name *</label>
+                                        <input type="text" required value={formData.buyerName} onChange={e => setFormData({ ...formData, buyerName: e.target.value })}
+                                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Company Ltd" />
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Supplier Name *</label>
+                                        <input type="text" required value={formData.supplierName} onChange={e => setFormData({ ...formData, supplierName: e.target.value })}
+                                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" placeholder="Supplier Global" />
+                                    </div>
+                                )}
                                 <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Buyer Name *</label>
-                                    <input type="text" required value={formData.buyerName} onChange={e => setFormData({ ...formData, buyerName: e.target.value })}
-                                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Company Ltd" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Buyer Email</label>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">{formData.type === 'SALES' ? 'Buyer' : 'Supplier'} Email</label>
                                     <input type="email" value={formData.buyerEmail} onChange={e => setFormData({ ...formData, buyerEmail: e.target.value })}
-                                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="buyer@company.com" />
+                                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="contact@email.com" />
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Buyer Address</label>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">{formData.type === 'SALES' ? 'Buyer' : 'Supplier'} Address</label>
                                 <input type="text" value={formData.buyerAddress} onChange={e => setFormData({ ...formData, buyerAddress: e.target.value })}
-                                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="123 Main St, Lagos" />
+                                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="123 Street Address" />
                             </div>
-                            {/* Dates & Terms */}
-                            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Invoice Date *</label>
-                                    <input type="date" required value={formData.invoiceDate} onChange={e => setFormData({ ...formData, invoiceDate: e.target.value })}
-                                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Due Date *</label>
-                                    <input type="date" required value={formData.dueDate} onChange={e => setFormData({ ...formData, dueDate: e.target.value })}
-                                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Currency</label>
-                                    <select value={formData.currency} onChange={e => setFormData({ ...formData, currency: e.target.value })}
-                                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500">
-                                        <option value="USD">USD</option>
-                                        <option value="NGN">NGN</option>
-                                        <option value="EUR">EUR</option>
-                                        <option value="GBP">GBP</option>
-                                    </select>
-                                </div>
+                            {/* Contracts */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {formData.type === 'SALES' ? (
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Sales Contract #</label>
+                                        <input type="text" value={formData.salesContractNumber} onChange={e => setFormData({ ...formData, salesContractNumber: e.target.value })}
+                                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="SC-12345" />
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Purchase Contract #</label>
+                                        <input type="text" value={formData.purchaseContractNumber} onChange={e => setFormData({ ...formData, purchaseContractNumber: e.target.value })}
+                                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" placeholder="PC-12345" />
+                                    </div>
+                                )}
                             </div>
 
                             {/* Line Items */}

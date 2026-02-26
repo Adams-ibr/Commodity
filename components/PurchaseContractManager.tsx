@@ -90,6 +90,53 @@ export const PurchaseContractManager: React.FC<PurchaseContractManagerProps> = (
         setShowReceiptForm(true);
     };
 
+    const handleRecordInvoice = async (contract: PurchaseContract) => {
+        const supplier = suppliers.find(s => s.id === contract.supplierId);
+        if (!supplier) return;
+
+        try {
+            const invoiceRes = await api.invoices.createInvoice({
+                companyId: contract.companyId,
+                type: 'PURCHASE',
+                invoiceNumber: `BILL-${contract.contractNumber}-${Date.now().toString().slice(-4)}`,
+                supplierId: contract.supplierId,
+                supplierName: supplier.name,
+                purchaseContractId: contract.id,
+                purchaseContractNumber: contract.contractNumber,
+                invoiceDate: new Date().toISOString().slice(0, 10),
+                dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10), // Default 15 days
+                items: [
+                    {
+                        description: `${getCommodityName(contract.commodityTypeId)} - Vendor Purchase Fulfillment`,
+                        quantity: contract.contractedQuantity,
+                        unitPrice: contract.pricePerTon,
+                        amount: contract.totalValue
+                    }
+                ],
+                subtotal: contract.totalValue,
+                taxRate: 0,
+                taxAmount: 0,
+                discount: 0,
+                totalAmount: contract.totalValue,
+                amountPaid: 0,
+                balanceDue: contract.totalValue,
+                currency: contract.currency,
+                status: 'DRAFT',
+                createdBy: 'system'
+            });
+
+            if (invoiceRes.success) {
+                alert(`Vendor Invoice (Bill) recorded successfully for tracking.`);
+                if (onAuditLog) {
+                    onAuditLog('PURCHASE_INVOICE_RECORD', `Recorded vendor invoice for contract ${contract.contractNumber}`);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to record invoice:', error);
+            alert('Error recording vendor invoice');
+        }
+    };
+
     const handleSaveReceipt = async (batchData: Partial<CommodityBatch>) => {
         setIsSubmitting(true);
         try {
@@ -339,6 +386,24 @@ export const PurchaseContractManager: React.FC<PurchaseContractManagerProps> = (
                                     >
                                         <PackageOpen className="w-4 h-4" />
                                         Receive Goods
+                                    </button>
+                                    <button
+                                        onClick={() => handleRecordInvoice(contract)}
+                                        className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium shadow-sm transition-colors w-full max-w-[200px] flex items-center justify-center gap-2"
+                                    >
+                                        <Receipt className="w-4 h-4" />
+                                        Record Invoice
+                                    </button>
+                                </div>
+                            )}
+                            {contract.status === ContractStatus.COMPLETED && (
+                                <div className="absolute inset-x-0 bottom-0 top-0 bg-white/90 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-4 gap-3">
+                                    <button
+                                        onClick={() => handleRecordInvoice(contract)}
+                                        className="px-6 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 font-medium shadow-sm transition-colors w-full max-w-[200px] flex items-center justify-center gap-2"
+                                    >
+                                        <Receipt className="w-4 h-4" />
+                                        Record Invoice
                                     </button>
                                 </div>
                             )}

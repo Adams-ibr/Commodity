@@ -122,27 +122,64 @@ export const SalesContractManager: React.FC<SalesContractManagerProps> = ({
 
         setIsGenerating(contract.id);
         try {
+            // 1. Generate PDF for the user
             const pdf = await api.documents.generateInvoicePDF(contract, buyer);
             const fileName = `Invoice_${contract.contractNumber}.pdf`;
+            pdf.save(fileName);
 
-            // Save to DB
+            // 2. Create formal Invoice record in DB for financial tracking
+            const invoiceRes = await api.invoices.createInvoice({
+                companyId: contract.companyId,
+                type: 'SALES',
+                invoiceNumber: `INV-${contract.contractNumber}-${Date.now().toString().slice(-4)}`,
+                buyerId: contract.buyerId,
+                buyerName: buyer.name,
+                buyerEmail: buyer.email,
+                buyerAddress: buyer.address,
+                salesContractId: contract.id,
+                salesContractNumber: contract.contractNumber,
+                invoiceDate: new Date().toISOString().slice(0, 10),
+                dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10), // Default 30 days
+                items: [
+                    {
+                        description: `${getCommodityName(contract.commodityTypeId)} - Sales Contract Fulfillment`,
+                        quantity: contract.contractedQuantity,
+                        unitPrice: contract.pricePerTon,
+                        amount: contract.totalValue
+                    }
+                ],
+                subtotal: contract.totalValue,
+                taxRate: 0,
+                taxAmount: 0,
+                discount: 0,
+                totalAmount: contract.totalValue,
+                amountPaid: 0,
+                balanceDue: contract.totalValue,
+                currency: contract.currency,
+                status: 'SENT',
+                createdBy: 'system'
+            });
+
+            // 3. Record document in library
             await api.documents.recordDocument({
                 companyId: contract.companyId,
                 referenceType: 'SALES_CONTRACT',
                 referenceId: contract.id,
                 documentType: DocumentType.INVOICE,
                 fileName,
-                filePath: `invoices/${fileName}`, // Simulated path
+                filePath: `invoices/${fileName}`,
                 fileSize: pdf.output().length,
                 mimeType: 'application/pdf',
                 version: 1,
                 uploadedBy: 'system'
             });
 
-            pdf.save(fileName);
-
             if (onAuditLog) {
-                onAuditLog('GENERATE_INVOICE', `Generated invoice for contract ${contract.contractNumber}`);
+                onAuditLog('GENERATE_INVOICE', `Generated and recorded financial invoice for contract ${contract.contractNumber}`);
+            }
+
+            if (invoiceRes.success) {
+                alert(`Invoice generated and recorded successfully for tracking.`);
             }
         } catch (error) {
             console.error('Failed to generate invoice:', error);
