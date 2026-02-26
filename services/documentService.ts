@@ -4,6 +4,8 @@
 import { dbList, dbGet, dbCreate, dbUpdate, dbDelete, Query } from './supabaseDb';
 import { COLLECTIONS } from './supabaseDb';
 import { ApiResponse, SalesContract, Buyer, Shipment, DocumentType } from '../types_commodity';
+import { jsPDF } from 'jspdf';
+import 'jspdf-autotable';
 
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -150,49 +152,32 @@ export class DocumentService {
     }
 
     // ──── PDF Generation ────
-    generateInvoicePDF(contract: SalesContract, buyer: Buyer): any {
-        try {
-            const jsPDF = (window as any).jspdf?.jsPDF;
-            if (!jsPDF) {
-                console.warn('jsPDF not loaded, returning mock');
-                return { output: () => '', save: (name: string) => alert(`Invoice ${name} generated (jsPDF not loaded)`) };
-            }
-            const doc = new jsPDF();
-            doc.setFontSize(20);
-            doc.text('INVOICE', 105, 20, { align: 'center' });
-            doc.setFontSize(12);
-            doc.text(`Contract: ${contract.contractNumber}`, 20, 40);
-            doc.text(`Buyer: ${buyer.name}`, 20, 50);
-            doc.text(`Commodity Qty: ${contract.contractedQuantity} MT`, 20, 60);
-            doc.text(`Price: ${contract.currency} ${contract.pricePerTon}/MT`, 20, 70);
-            doc.text(`Total Value: ${contract.currency} ${contract.totalValue.toLocaleString()}`, 20, 80);
-            doc.text(`Date: ${contract.contractDate}`, 20, 90);
-            doc.text(`Status: ${contract.status}`, 20, 100);
-            return doc;
-        } catch {
-            return { output: () => '', save: (name: string) => alert(`Invoice ${name} generated`) };
-        }
+    generateInvoicePDF(contract: SalesContract, buyer: Buyer): jsPDF {
+        const doc = new jsPDF();
+        doc.setFontSize(20);
+        doc.text('INVOICE', 105, 20, { align: 'center' });
+        doc.setFontSize(12);
+        doc.text(`Contract: ${contract.contractNumber}`, 20, 40);
+        doc.text(`Buyer: ${buyer.name}`, 20, 50);
+        doc.text(`Commodity Qty: ${contract.contractedQuantity} MT`, 20, 60);
+        doc.text(`Price: ${contract.currency} ${contract.pricePerTon}/MT`, 20, 70);
+        doc.text(`Total Value: ${contract.currency} ${contract.totalValue.toLocaleString()}`, 20, 80);
+        doc.text(`Date: ${contract.contractDate}`, 20, 90);
+        doc.text(`Status: ${contract.status}`, 20, 100);
+        return doc;
     }
 
-    generateWaybillPDF(shipment: Shipment, _buyer?: any, _contract?: any): any {
-        try {
-            const jsPDF = (window as any).jspdf?.jsPDF;
-            if (!jsPDF) {
-                return { output: () => '', save: (name: string) => alert(`Waybill ${name} generated (jsPDF not loaded)`) };
-            }
-            const doc = new jsPDF();
-            doc.setFontSize(20);
-            doc.text('WAYBILL', 105, 20, { align: 'center' });
-            doc.setFontSize(12);
-            doc.text(`Shipment: ${shipment.shipmentNumber}`, 20, 40);
-            doc.text(`Vessel: ${shipment.vesselName || 'N/A'}`, 20, 50);
-            doc.text(`Loading Port: ${shipment.loadingPort || 'N/A'}`, 20, 60);
-            doc.text(`Destination: ${shipment.destinationPort || 'N/A'}`, 20, 70);
-            doc.text(`Total Qty: ${shipment.totalQuantity} MT`, 20, 80);
-            doc.text(`B/L: ${shipment.billOfLading || 'N/A'}`, 20, 90);
-            return doc;
-        } catch {
-            return { output: () => '', save: (name: string) => alert(`Waybill ${name} generated`) };
-        }
+    generateWaybillPDF(shipment: Shipment, _buyer?: any, _contract?: any): jsPDF {
+        const doc = new jsPDF();
+        doc.setFontSize(20);
+        doc.text('WAYBILL', 105, 20, { align: 'center' });
+        doc.setFontSize(12);
+        doc.text(`Shipment: ${shipment.shipmentNumber}`, 20, 40);
+        doc.text(`Vessel: ${shipment.vesselName || 'N/A'}`, 20, 50);
+        doc.text(`Loading Port: ${shipment.loadingPort || 'N/A'}`, 20, 60);
+        doc.text(`Destination: ${shipment.destinationPort || 'N/A'}`, 20, 70);
+        doc.text(`Total Qty: ${shipment.totalQuantity} MT`, 20, 80);
+        doc.text(`B/L: ${shipment.billOfLading || 'N/A'}`, 20, 90);
+        return doc;
     }
 }
