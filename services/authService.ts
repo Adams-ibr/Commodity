@@ -106,11 +106,29 @@ async function getCurrentUser(): Promise<AuthUser | null> {
             };
         }
 
+        // No profile row found — auto-create for the primary admin
+        const isAdmin = acct.email === 'admin@galaltixnig.com';
+        const role = isAdmin ? UserRole.SUPER_ADMIN : UserRole.OPERATOR;
+        const name = acct.user_metadata?.full_name || (isAdmin ? 'Galaltix Nig Ltd' : acct.email || '');
+
+        try {
+            await dbCreate(COLLECTIONS.USERS, {
+                email: acct.email,
+                name,
+                role,
+                is_active: true,
+                auth_id: acct.id,
+                company_id: '00000000-0000-0000-0000-000000000001',
+            });
+        } catch (createErr) {
+            console.warn('Auto-create user profile failed:', createErr);
+        }
+
         return {
             id: acct.id,
             email: acct.email || '',
-            name: acct.user_metadata?.full_name || acct.email || '',
-            role: UserRole.OPERATOR,
+            name,
+            role,
         };
     } catch {
         return null;
