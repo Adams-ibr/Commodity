@@ -6,8 +6,9 @@ import {
     FileText, Plus, Search, X, Check, AlertCircle, DollarSign,
     ChevronLeft, ChevronRight, Download, Send, Eye, Clock,
     CheckCircle, XCircle, Printer, CreditCard, Receipt, Repeat,
-    User, Building, ShoppingCart, ArrowLeftRight
+    User, Building, ShoppingCart, ArrowLeftRight, Package
 } from 'lucide-react';
+import { SalesContract, PurchaseContract, Buyer, Supplier, CommodityType } from '../types_commodity';
 
 interface InvoiceManagerProps {
     userRole: UserRole;
@@ -38,14 +39,33 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
     const [paymentAmount, setPaymentAmount] = useState('');
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+    // Selection data
+    const [salesContracts, setSalesContracts] = useState<SalesContract[]>([]);
+    const [purchaseContracts, setPurchaseContracts] = useState<PurchaseContract[]>([]);
+    const [buyers, setBuyers] = useState<Buyer[]>([]);
+    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+    const [isDataLoading, setIsDataLoading] = useState(false);
+
+    // Reference data
+    const [salesContracts, setSalesContracts] = useState<SalesContract[]>([]);
+    const [purchaseContracts, setPurchaseContracts] = useState<PurchaseContract[]>([]);
+    const [buyers, setBuyers] = useState<Buyer[]>([]);
+    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+    const [commodityTypes, setCommodityTypes] = useState<CommodityType[]>([]);
+
+
     // Form state
     const [formData, setFormData] = useState({
         type: 'SALES' as InvoiceType,
+        buyerId: '',
         buyerName: '',
         buyerEmail: '',
         buyerAddress: '',
+        supplierId: '',
         supplierName: '',
+        salesContractId: '',
         salesContractNumber: '',
+        purchaseContractId: '',
         purchaseContractNumber: '',
         invoiceDate: new Date().toISOString().slice(0, 10),
         dueDate: '',
@@ -61,6 +81,52 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
 
     useEffect(() => { loadInvoices(); }, [page, typeFilter]);
     useEffect(() => { setPage(1); }, [statusFilter, typeFilter]);
+    useEffect(() => {
+        if (showForm) {
+            loadSelectionData();
+        }
+    }, [showForm]);
+
+    const loadSelectionData = async () => {
+        setIsDataLoading(true);
+        try {
+            const [bRes, sRes, scRes, pcRes] = await Promise.all([
+                api.sales.getBuyers(),
+                api.procurement.getSuppliers(),
+                api.sales.getSalesContracts({ limit: 1000 }),
+                api.procurement.getPurchaseContracts()
+            ]);
+
+            if (bRes.success) setBuyers(bRes.data || []);
+            if (sRes.success) setSuppliers(sRes.data || []);
+            if (scRes.success) setSalesContracts(scRes.data?.data || []);
+            if (pcRes.success) setPurchaseContracts(pcRes.data || []);
+        } catch (e) {
+            console.error('Failed to load selection data', e);
+        }
+        setIsDataLoading(false);
+    };
+    useEffect(() => { loadReferenceData(); }, []);
+
+    const loadReferenceData = async () => {
+        try {
+            const [sc, pc, b, s, ct] = await Promise.all([
+                api.sales.getSalesContracts(),
+                api.procurement.getPurchaseContracts(),
+                api.sales.getBuyers(),
+                api.procurement.getSuppliers(),
+                api.commodityMaster.getCommodityTypes()
+            ]);
+
+            if (sc.success) setSalesContracts(sc.data?.data || []);
+            if (pc.success) setPurchaseContracts(pc.data || []);
+            if (b.success) setBuyers(b.data || []);
+            if (s.success) setSuppliers(s.data || []);
+            if (ct.success) setCommodityTypes(ct.data || []);
+        } catch (err) {
+            console.error('Failed to load reference data:', err);
+        }
+    };
 
     const loadInvoices = async () => {
         setIsLoading(true);
@@ -136,11 +202,15 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
                 companyId: '',
                 type: formData.type,
                 invoiceNumber,
+                buyerId: formData.type === 'SALES' ? formData.buyerId : undefined,
                 buyerName: formData.type === 'SALES' ? formData.buyerName : undefined,
                 buyerEmail: formData.buyerEmail,
                 buyerAddress: formData.buyerAddress,
+                supplierId: formData.type === 'PURCHASE' ? formData.supplierId : undefined,
                 supplierName: formData.type === 'PURCHASE' ? formData.supplierName : undefined,
+                salesContractId: formData.salesContractId,
                 salesContractNumber: formData.salesContractNumber,
+                purchaseContractId: formData.purchaseContractId,
                 purchaseContractNumber: formData.purchaseContractNumber,
                 invoiceDate: formData.invoiceDate,
                 dueDate: formData.dueDate,
@@ -173,8 +243,10 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
     const resetForm = () => {
         setFormData({
             type: 'SALES',
-            buyerName: '', buyerEmail: '', buyerAddress: '', supplierName: '',
-            salesContractNumber: '', purchaseContractNumber: '',
+            buyerId: '', buyerName: '', buyerEmail: '', buyerAddress: '',
+            supplierId: '', supplierName: '',
+            salesContractId: '', salesContractNumber: '',
+            purchaseContractId: '', purchaseContractNumber: '',
             invoiceDate: new Date().toISOString().slice(0, 10), dueDate: '',
             currency: 'USD', taxRate: 0, discount: 0, notes: '', paymentTerms: 'Net 30'
         });
@@ -361,7 +433,10 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
                                                 <td className="px-4 py-4">
                                                     <div className="font-bold text-slate-800 text-sm">{inv.invoiceNumber}</div>
                                                     {(inv.salesContractNumber || inv.purchaseContractNumber) && (
-                                                        <div className="text-xs text-slate-500 mt-0.5">Contract: {inv.salesContractNumber || inv.purchaseContractNumber}</div>
+                                                        <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
+                                                            <Package className="w-3 h-3" />
+                                                            Contract: {inv.salesContractNumber || inv.purchaseContractNumber}
+                                                        </div>
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-4">
@@ -490,18 +565,80 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
                                     className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="123 Street Address" />
                             </div>
                             {/* Contracts */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div className="grid grid-cols-1 gap-4">
                                 {formData.type === 'SALES' ? (
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Sales Contract #</label>
-                                        <input type="text" value={formData.salesContractNumber} onChange={e => setFormData({ ...formData, salesContractNumber: e.target.value })}
-                                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="SC-12345" />
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Select Sales Contract</label>
+                                        <select
+                                            value={formData.salesContractId}
+                                            onChange={(e) => {
+                                                const contract = salesContracts.find(c => c.id === e.target.value);
+                                                if (contract) {
+                                                    const buyer = buyers.find(b => b.id === contract.buyerId);
+                                                    const commodity = commodityTypes.find(ct => ct.id === contract.commodityTypeId);
+                                                    setFormData({
+                                                        ...formData,
+                                                        salesContractId: contract.id,
+                                                        salesContractNumber: contract.contractNumber,
+                                                        buyerId: contract.buyerId,
+                                                        buyerName: buyer?.name || '',
+                                                        buyerEmail: buyer?.email || '',
+                                                        buyerAddress: buyer?.address ? (typeof buyer.address === 'string' ? buyer.address : buyer.address.street) : '',
+                                                        currency: contract.currency || 'USD',
+                                                        paymentTerms: contract.paymentTerms || 'Net 30'
+                                                    });
+                                                    setItems([{
+                                                        description: `${commodity?.name || 'Commodity'} - Contract Fulfillment (${contract.contractNumber})`,
+                                                        quantity: contract.contractedQuantity - contract.shippedQuantity,
+                                                        unitPrice: contract.pricePerTon,
+                                                        amount: (contract.contractedQuantity - contract.shippedQuantity) * contract.pricePerTon
+                                                    }]);
+                                                }
+                                            }}
+                                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                                        >
+                                            <option value="">-- Choose existing contract --</option>
+                                            {salesContracts.map(c => (
+                                                <option key={c.id} value={c.id}>{c.contractNumber} - {buyers.find(b => b.id === c.buyerId)?.name} ({c.status})</option>
+                                            ))}
+                                        </select>
                                     </div>
                                 ) : (
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Purchase Contract #</label>
-                                        <input type="text" value={formData.purchaseContractNumber} onChange={e => setFormData({ ...formData, purchaseContractNumber: e.target.value })}
-                                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" placeholder="PC-12345" />
+                                        <label className="block text-sm font-medium text-slate-700 mb-1">Select Purchase Contract</label>
+                                        <select
+                                            value={formData.purchaseContractId}
+                                            onChange={(e) => {
+                                                const contract = purchaseContracts.find(c => c.id === e.target.value);
+                                                if (contract) {
+                                                    const supplier = suppliers.find(s => s.id === contract.supplierId);
+                                                    const commodity = commodityTypes.find(ct => ct.id === contract.commodityTypeId);
+                                                    setFormData({
+                                                        ...formData,
+                                                        purchaseContractId: contract.id,
+                                                        purchaseContractNumber: contract.contractNumber,
+                                                        supplierId: contract.supplierId,
+                                                        supplierName: supplier?.name || '',
+                                                        buyerEmail: supplier?.email || '', // Reusing email for simplicity
+                                                        buyerAddress: supplier?.address ? (typeof supplier.address === 'string' ? supplier.address : supplier.address.street) : '',
+                                                        currency: contract.currency || 'USD',
+                                                        paymentTerms: contract.paymentTerms || 'Net 15'
+                                                    });
+                                                    setItems([{
+                                                        description: `${commodity?.name || 'Commodity'} - Purchase Fulfillment (${contract.contractNumber})`,
+                                                        quantity: contract.contractedQuantity - contract.deliveredQuantity,
+                                                        unitPrice: contract.pricePerTon,
+                                                        amount: (contract.contractedQuantity - contract.deliveredQuantity) * contract.pricePerTon
+                                                    }]);
+                                                }
+                                            }}
+                                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                                        >
+                                            <option value="">-- Choose existing contract --</option>
+                                            {purchaseContracts.map(c => (
+                                                <option key={c.id} value={c.id}>{c.contractNumber} - {suppliers.find(s => s.id === c.supplierId)?.name} ({c.status})</option>
+                                            ))}
+                                        </select>
                                     </div>
                                 )}
                             </div>
@@ -617,6 +754,19 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
                                 <span>Due: {formatDate(showDetail.dueDate)}</span>
                                 {showDetail.paymentTerms && <span>{showDetail.paymentTerms}</span>}
                             </div>
+                            {(showDetail.salesContractNumber || showDetail.purchaseContractNumber) && (
+                                <div className="bg-indigo-50 p-3 rounded-lg flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Package className="w-4 h-4 text-indigo-600" />
+                                        <span className="text-sm font-medium text-indigo-900">
+                                            Linked to {showDetail.type === 'SALES' ? 'Sales' : 'Purchase'} Contract
+                                        </span>
+                                    </div>
+                                    <span className="text-xs font-bold bg-white px-2 py-1 rounded border border-indigo-200 text-indigo-600">
+                                        {showDetail.salesContractNumber || showDetail.purchaseContractNumber}
+                                    </span>
+                                </div>
+                            )}
                             {showDetail.notes && <p className="text-sm text-slate-500 bg-slate-50 p-3 rounded-lg">{showDetail.notes}</p>}
 
                             <div className="flex gap-2 pt-3 border-t">
