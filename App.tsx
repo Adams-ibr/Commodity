@@ -55,6 +55,7 @@ import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { AuditTrailManager } from './components/AuditTrailManager';
 import { CommodityMasterManager } from './components/CommodityMasterManager';
 import { UserManagement } from './components/UserManagement';
+import { InvoiceManager } from './components/InvoiceManager';
 import { CacheStatus } from './components/CacheStatus';
 import { OfflineStatus } from './components/OfflineStatus';
 import { SignIn } from './components/SignIn';
@@ -149,6 +150,8 @@ function App() {
         return <AuditTrailManager />;
       case 'commodities':
         return <CommodityMasterManager userRole={currentUser.role} onAuditLog={addAuditLog} />;
+      case 'invoices':
+        return <InvoiceManager userRole={currentUser.role} onAuditLog={addAuditLog} />;
       default:
         return <div className="text-center p-10 text-slate-500">Module under construction</div>;
     }
@@ -196,6 +199,7 @@ function App() {
             <p className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Sales & Export</p>
             <NavItem id="buyers" label="Buyer Directory" icon={Target} />
             <NavItem id="sales-contracts" label="Sales Contracts" icon={FileText} />
+            <NavItem id="invoices" label="Invoice Management" icon={Receipt} />
             <NavItem id="shipments" label="Shipments" icon={Ship} />
             <NavItem id="compliance" label="Export Compliance" icon={CheckCircle} />
           </div>

@@ -32,6 +32,7 @@ export const COLLECTIONS = {
     COMPLIANCE_RECORDS: 'compliance_records',
     TRADE_FINANCE: 'trade_finance',
     GOODS_RECEIPTS: 'goods_receipts',
+    INVOICES: 'invoices',
 } as const;
 
 // ──── ID helper ────
