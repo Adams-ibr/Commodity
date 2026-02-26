@@ -21,17 +21,21 @@ export class WarehouseService {
                 Query.offset(offset)
             ]);
             if (error) return { success: false, error };
-            // Filter current_weight > 0 in code to avoid attribute index issues
+
             const batches: CommodityBatch[] = (data || [])
                 .filter((item: any) => Number(item.current_weight || 0) > 0)
                 .map((item: any) => ({
                     id: item.$id, companyId: item.company_id, batchNumber: item.batch_number,
                     commodityTypeId: item.commodity_type_id, supplierId: item.supplier_id,
-                    purchaseContractId: item.purchase_contract_id, locationId: item.location_id,
+                    purchaseContractId: item.purchase_contract_id,
+                    purchaseContractItemId: item.purchase_contract_item_id,
+                    locationId: item.location_id,
                     cropYear: item.crop_year, receivedDate: item.received_date,
-                    receivedWeight: item.received_weight, currentWeight: item.current_weight,
+                    receivedWeight: Number(item.received_weight || 0),
+                    currentWeight: Number(item.current_weight || 0),
                     packagingInfo: item.packaging_info, grade: item.grade, status: item.status,
-                    costPerTon: item.cost_per_ton, totalCost: item.total_cost,
+                    costPerTon: Number(item.cost_per_ton || 0),
+                    totalCost: Number(item.total_cost || 0),
                     currency: item.currency, notes: item.notes, createdBy: item.created_by,
                     createdAt: item.$createdAt, updatedAt: item.$updatedAt
                 }));
@@ -91,6 +95,60 @@ export class WarehouseService {
             return { success: true, data: movements };
         } catch (error) {
             return { success: false, error: 'Failed to fetch movements' };
+        }
+    }
+
+    async createGoodsReceipt(
+        receiptData: {
+            purchaseContractId: string;
+            purchaseContractItemId: string;
+            locationId: string;
+            receivedWeight: number;
+            receivedDate: string;
+            grade: string;
+            packagingInfo: any;
+            notes?: string;
+            createdBy?: string;
+        },
+        companyId: string = DEFAULT_COMPANY_ID
+    ): Promise<ApiResponse<CommodityBatch>> {
+        try {
+            const { data: contract } = await dbGet(COLLECTIONS.PURCHASE_CONTRACTS, receiptData.purchaseContractId);
+            if (!contract || contract.status !== 'ACTIVE') {
+                return { success: false, error: 'Cannot receive goods for a contract that is not ACTIVE' };
+            }
+
+            const batchNumber = `BAT-${Date.now().toString().slice(-8)}`;
+            const { data, error } = await dbCreate(COLLECTIONS.COMMODITY_BATCHES, {
+                company_id: companyId,
+                batch_number: batchNumber,
+                commodity_type_id: contract.commodity_type_id,
+                supplier_id: contract.supplier_id,
+                purchase_contract_id: receiptData.purchaseContractId,
+                purchase_contract_item_id: receiptData.purchaseContractItemId,
+                location_id: receiptData.locationId,
+                received_date: receiptData.receivedDate,
+                received_weight: receiptData.receivedWeight,
+                current_weight: receiptData.receivedWeight,
+                packaging_info: JSON.stringify(receiptData.packagingInfo),
+                grade: receiptData.grade,
+                status: 'RECEIVED' as BatchStatus,
+                cost_per_ton: (contract as any).price_per_ton || 0,
+                total_cost: ((contract as any).price_per_ton || 0) * receiptData.receivedWeight,
+                currency: contract.currency,
+                notes: receiptData.notes || '',
+                created_by: receiptData.createdBy || 'system'
+            });
+
+            if (error || !data) return { success: false, error: error || 'Failed' };
+
+            await dbUpdate(COLLECTIONS.PURCHASE_CONTRACT_ITEMS, receiptData.purchaseContractItemId, {
+                delivered_quantity: (Number((data as any).delivered_quantity || 0) + receiptData.receivedWeight)
+            });
+
+            return { success: true, data: data as any };
+        } catch (error) {
+            return { success: false, error: 'Failed' };
         }
     }
 }

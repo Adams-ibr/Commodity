@@ -33,6 +33,8 @@ export const COLLECTIONS = {
     TRADE_FINANCE: 'trade_finance',
     GOODS_RECEIPTS: 'goods_receipts',
     INVOICES: 'invoices',
+    PURCHASE_CONTRACT_ITEMS: 'purchase_contract_items',
+    SALES_CONTRACT_ITEMS: 'sales_contract_items',
 } as const;
 
 // ──── ID helper ────

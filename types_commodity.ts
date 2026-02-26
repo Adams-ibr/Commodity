@@ -299,21 +299,67 @@ export interface PurchaseContract {
   deliveryEndDate?: string;
   contractedQuantity: number;
   deliveredQuantity: number;
-  pricePerTon: number;
-  totalValue: number;
+  pricePerTon?: number; // Kept for backward compatibility, preference is line items
+  totalValue?: number;
+  totalAmount?: number; // New field for calculated total
   currency: string;
   paymentTerms?: string;
   qualitySpecifications?: Record<string, any>;
   status: ContractStatus;
+  items?: PurchaseContractItem[]; // Multi-item support
   createdBy: string;
   createdAt: string;
 }
 
 export enum ContractStatus {
   DRAFT = 'DRAFT',
+  SUBMITTED = 'SUBMITTED',
   ACTIVE = 'ACTIVE',
+  PARTIALLY_FULFILLED = 'PARTIALLY_FULFILLED', // Purchase specific
+  FULFILLED = 'FULFILLED', // Purchase specific
+  SHIPMENT_IN_PROGRESS = 'SHIPMENT_IN_PROGRESS', // Sales specific
+  PARTIALLY_SHIPPED = 'PARTIALLY_SHIPPED', // Sales specific
+  FULLY_SHIPPED = 'FULLY_SHIPPED', // Sales specific
   COMPLETED = 'COMPLETED',
+  CLOSED = 'CLOSED',
   CANCELLED = 'CANCELLED'
+}
+
+export interface ContractItem {
+  id: string;
+  contractId: string;
+  commodityTypeId: string;
+  grade?: string;
+  packagingTypeId?: string;
+  quantity: number;
+  unitPrice: number;
+  currency: string;
+  pricingLogic?: PricingLogic;
+  specifications?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PurchaseContractItem extends ContractItem {
+  deliveredQuantity: number;
+}
+
+export interface SalesContractItem extends ContractItem {
+  shippedQuantity: number;
+}
+
+export interface PricingLogic {
+  type: 'FIXED' | 'FORMULA';
+  formula?: string;
+  basePrice?: number;
+  adjustments?: PricingAdjustment[];
+}
+
+export interface PricingAdjustment {
+  parameter: string;
+  threshold: number;
+  operator: '>' | '<' | '>=' | '<=';
+  impactPerUnit: number; // e.g., -20 per MT
 }
 
 // =====================================================
@@ -520,13 +566,15 @@ export interface SalesContract {
   shipmentPeriodEnd?: string;
   contractedQuantity: number;
   shippedQuantity: number;
-  pricePerTon: number;
-  totalValue: number;
+  pricePerTon?: number;
+  totalValue?: number;
+  totalAmount?: number;
   currency: string;
   incoterms?: string; // FOB, CIF, etc.
   destinationPort?: string;
   qualitySpecifications?: Record<string, any>;
   status: ContractStatus;
+  items?: SalesContractItem[];
   createdBy: string;
   createdAt: string;
 }

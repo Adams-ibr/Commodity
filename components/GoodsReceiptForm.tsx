@@ -1,7 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { PackageOpen, Save, X, Calculator, Search } from 'lucide-react';
-import { PurchaseContract, Supplier, CommodityType, CommodityBatch, BatchStatus } from '../types_commodity';
-import { Location } from '../types_commodity';
+import React, { useState, useEffect, useMemo } from 'react';
+import { PackageOpen, Save, X, Calculator, Search, Layers, CheckCircle } from 'lucide-react';
+import { PurchaseContract, Supplier, CommodityType, CommodityBatch, BatchStatus, PurchaseContractItem, Location } from '../types_commodity';
 
 interface GoodsReceiptFormProps {
     contracts: PurchaseContract[];
@@ -24,6 +23,7 @@ export const GoodsReceiptForm: React.FC<GoodsReceiptFormProps> = ({
 }) => {
     const [formData, setFormData] = useState({
         purchaseContractId: '',
+        purchaseContractItemId: '',
         supplierId: '',
         commodityTypeId: '',
         locationId: locations.length > 0 ? locations[0].id : '',
@@ -33,89 +33,88 @@ export const GoodsReceiptForm: React.FC<GoodsReceiptFormProps> = ({
         bagCount: '',
         bagWeight: '',
         costPerTon: '',
+        grade: '',
         currency: 'USD',
         notes: ''
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
 
-    // Auto-fill from contract
+    const selectedContract = useMemo(() =>
+        contracts.find(c => c.id === formData.purchaseContractId),
+        [formData.purchaseContractId, contracts]);
+
+    const availableItems = useMemo(() =>
+        (selectedContract as any)?.items || [],
+        [selectedContract]);
+
+    // Auto-fill from contract/item
     useEffect(() => {
-        if (formData.purchaseContractId) {
-            const contract = contracts.find(c => c.id === formData.purchaseContractId);
-            if (contract) {
+        if (formData.purchaseContractId && selectedContract) {
+            setFormData(prev => ({
+                ...prev,
+                supplierId: selectedContract.supplierId,
+                currency: selectedContract.currency
+            }));
+
+            // If only one item, auto-select it
+            if (availableItems.length === 1 && !formData.purchaseContractItemId) {
+                setFormData(prev => ({ ...prev, purchaseContractItemId: availableItems[0].id }));
+            }
+        }
+    }, [formData.purchaseContractId, selectedContract, availableItems]);
+
+    useEffect(() => {
+        if (formData.purchaseContractItemId) {
+            const item = availableItems.find((i: any) => i.id === formData.purchaseContractItemId);
+            if (item) {
                 setFormData(prev => ({
                     ...prev,
-                    supplierId: contract.supplierId,
-                    commodityTypeId: contract.commodityTypeId,
-                    costPerTon: contract.pricePerTon.toString(),
-                    currency: contract.currency
+                    commodityTypeId: item.commodityTypeId,
+                    costPerTon: item.unitPrice.toString(),
+                    grade: item.grade || ''
                 }));
             }
         }
-    }, [formData.purchaseContractId, contracts]);
+    }, [formData.purchaseContractItemId, availableItems]);
 
     const validateForm = () => {
         const newErrors: Record<string, string> = {};
-
-        if (!formData.supplierId && !formData.purchaseContractId) {
-            newErrors.supplierId = 'Supplier or Contract is required';
-        }
-        if (!formData.commodityTypeId) newErrors.commodityTypeId = 'Commodity type is required';
-        if (!formData.locationId) newErrors.locationId = 'Receiving location is required';
+        if (!formData.supplierId) newErrors.supplierId = 'Supplier is required';
+        if (!formData.commodityTypeId) newErrors.commodityTypeId = 'Commodity is required';
+        if (!formData.locationId) newErrors.locationId = 'Location is required';
+        if (selectedContract && !formData.purchaseContractItemId) newErrors.purchaseContractItemId = 'Line item selection required for contracts';
 
         const weight = Number(formData.receivedWeight);
-        if (!formData.receivedWeight || isNaN(weight) || weight <= 0) {
-            newErrors.receivedWeight = 'Valid received weight is required';
-        }
-
-        const cost = Number(formData.costPerTon);
-        if (!formData.costPerTon || isNaN(cost) || cost < 0) {
-            newErrors.costPerTon = 'Valid cost per MT is required';
-        }
+        if (!formData.receivedWeight || isNaN(weight) || weight <= 0) newErrors.receivedWeight = 'Required';
 
         setErrors(newErrors);
         return Object.keys(newErrors).length === 0;
     };
 
-    const calculateWeightFromBags = () => {
-        const bags = Number(formData.bagCount) || 0;
-        const weightPerBag = Number(formData.bagWeight) || 0; // in kg
-        if (bags > 0 && weightPerBag > 0) {
-            // Convert kg to MT (metric tons)
-            const totalMT = (bags * weightPerBag) / 1000;
-            setFormData(prev => ({ ...prev, receivedWeight: totalMT.toString() }));
-        }
-    };
-
-    const generateBatchNumber = () => {
-        const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-        const randId = Math.floor(1000 + Math.random() * 9000);
-        return `GRN-${dateStr}-${randId}`;
-    };
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-
         if (!validateForm()) return;
 
         const weight = Number(formData.receivedWeight);
         const costPerTon = Number(formData.costPerTon);
 
-        const batchData: Partial<CommodityBatch> = {
-            batchNumber: generateBatchNumber(),
+        const batchData: any = {
+            batchNumber: `GRN-${Date.now().toString().slice(-8)}`,
             commodityTypeId: formData.commodityTypeId,
-            supplierId: formData.supplierId || '',
+            supplierId: formData.supplierId,
             purchaseContractId: formData.purchaseContractId || undefined,
+            purchaseContractItemId: formData.purchaseContractItemId || undefined,
             locationId: formData.locationId,
             cropYear: formData.cropYear,
             receivedDate: formData.receivedDate,
             receivedWeight: weight,
-            currentWeight: weight, // Initially matches received
-            packagingInfo: {
-                bagCount: Number(formData.bagCount) || undefined,
-                bagWeight: Number(formData.bagWeight) || undefined,
-            },
+            currentWeight: weight,
+            grade: formData.grade,
+            packagingInfo: JSON.stringify({
+                bagCount: Number(formData.bagCount) || 0,
+                bagWeight: Number(formData.bagWeight) || 0,
+            }),
             status: BatchStatus.RECEIVED,
             costPerTon: costPerTon,
             totalCost: weight * costPerTon,
@@ -126,286 +125,189 @@ export const GoodsReceiptForm: React.FC<GoodsReceiptFormProps> = ({
         onSave(batchData);
     };
 
-    const activeContracts = contracts.filter(c => c.status !== 'CANCELLED' && c.status !== 'COMPLETED');
+    const handleInputChange = (field: string, value: any) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    const getSupplierName = (id: string) => suppliers.find(s => s.id === id)?.name || "Supplier";
+    const getCommodityName = (id: string) => commodityTypes.find(c => c.id === id)?.name || "Commodity";
 
     return (
-        <div className="fixed inset-0 bg-black/50 flex flex-col items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh]">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex flex-col items-center justify-center p-4 z-50 transition-all">
+            <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-4xl overflow-hidden flex flex-col max-h-[92vh] border border-slate-200">
 
                 {/* Header */}
-                <div className="flex items-center justify-between p-6 border-b border-slate-200 bg-emerald-50 text-emerald-900">
-                    <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                            <PackageOpen className="w-5 h-5 text-emerald-600" />
+                <div className="flex items-center justify-between p-8 border-b border-slate-100 bg-slate-50/50">
+                    <div className="flex items-center gap-4">
+                        <div className="w-14 h-14 rounded-3xl bg-emerald-600 flex items-center justify-center shadow-xl shadow-emerald-100">
+                            <PackageOpen className="w-8 h-8 text-white" />
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold">Goods Receipt Note (GRN)</h2>
-                            <p className="text-sm text-emerald-700">Receive commodity and create inventory batch</p>
+                            <h2 className="text-2xl font-black text-slate-900 tracking-tight">Cargo Intake Authorization</h2>
+                            <p className="text-slate-500 text-sm font-medium">Record physical arrival and link to trade agreement</p>
                         </div>
                     </div>
-                    <button
-                        onClick={onCancel}
-                        className="p-2 text-emerald-700 hover:bg-emerald-200 rounded-full transition-colors"
-                    >
-                        <X className="w-5 h-5" />
+                    <button onClick={onCancel} className="p-3 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-2xl transition-all">
+                        <X className="w-6 h-6" />
                     </button>
                 </div>
 
-                {/* Content */}
-                <div className="flex-1 overflow-y-auto p-6">
-                    <form id="grn-form" onSubmit={handleSubmit} className="space-y-6">
+                <div className="flex-1 overflow-y-auto p-10 bg-white">
+                    <form id="grn-form" onSubmit={handleSubmit} className="space-y-12">
 
-                        {/* Source Section */}
-                        <section className="bg-slate-50 p-4 rounded-lg border border-slate-200 space-y-4">
-                            <h3 className="text-sm font-semibold text-slate-800 uppercase tracking-wider flex items-center gap-2">
-                                <Search className="w-4 h-4 text-emerald-600" /> Receipt Source
-                            </h3>
+                        {/* Section 1: Source & Authorization */}
+                        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                            <div className="space-y-6">
+                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                    <Search className="w-4 h-4" /> 01. Source Verification
+                                </h3>
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                                        Link Purchase Contract (Optional)
-                                    </label>
-                                    <select
-                                        value={formData.purchaseContractId}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, purchaseContractId: e.target.value }))}
-                                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500"
-                                    >
-                                        <option value="">-- No Contract (Spot Purchase) --</option>
-                                        {activeContracts.map(c => (
-                                            <option key={c.id} value={c.id}>
-                                                {c.contractNumber} - {suppliers.find(s => s.id === c.supplierId)?.name}
-                                            </option>
-                                        ))}
-                                    </select>
-                                </div>
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">Active Purchase Contract</label>
+                                        <select
+                                            value={formData.purchaseContractId}
+                                            onChange={(e) => handleInputChange('purchaseContractId', e.target.value)}
+                                            className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-100 outline-none transition-all font-bold"
+                                        >
+                                            <option value="">Spot Purchase (No Link)</option>
+                                            {contracts.filter(c => c.status === 'ACTIVE').map(c => (
+                                                <option key={c.id} value={c.id}>{c.contractNumber} — {getSupplierName(c.supplierId)}</option>
+                                            ))}
+                                        </select>
+                                    </div>
 
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                                        Supplier *
-                                    </label>
-                                    <select
-                                        value={formData.supplierId}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, supplierId: e.target.value }))}
-                                        disabled={!!formData.purchaseContractId}
-                                        className={`w-full px-3 py-2 border rounded-md focus:ring-emerald-500 focus:border-emerald-500 ${errors.supplierId ? 'border-red-500' : 'border-slate-300'
-                                            } ${!!formData.purchaseContractId ? 'bg-slate-100' : ''}`}
-                                    >
-                                        <option value="">Select Supplier</option>
-                                        {suppliers.map(s => (
-                                            <option key={s.id} value={s.id}>{s.name}</option>
-                                        ))}
-                                    </select>
-                                    {errors.supplierId && <p className="mt-1 text-xs text-red-500">{errors.supplierId}</p>}
-                                </div>
-                            </div>
-                        </section>
+                                    {formData.purchaseContractId && (
+                                        <div className="animate-in slide-in-from-top-2 duration-300">
+                                            <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center gap-2">
+                                                <Layers className="w-4 h-4 text-indigo-500" /> Contract Line Item *
+                                            </label>
+                                            <select
+                                                value={formData.purchaseContractItemId}
+                                                onChange={(e) => handleInputChange('purchaseContractItemId', e.target.value)}
+                                                className={`w-full px-4 py-3 bg-white border rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none transition-all font-bold ${errors.purchaseContractItemId ? 'border-rose-300 shadow-rose-50 shadow-lg' : 'border-slate-200'}`}
+                                            >
+                                                <option value="">Select commodity from contract...</option>
+                                                {availableItems.map((item: any) => (
+                                                    <option key={item.id} value={item.id}>
+                                                        {getCommodityName(item.commodityTypeId)} — {item.grade || 'Standard'} ({item.quantity} MT)
+                                                    </option>
+                                                ))}
+                                            </select>
+                                        </div>
+                                    )}
 
-                        {/* Commodity Details */}
-                        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div className="md:col-span-1">
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
-                                    Commodity Type *
-                                </label>
-                                <select
-                                    value={formData.commodityTypeId}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, commodityTypeId: e.target.value }))}
-                                    disabled={!!formData.purchaseContractId}
-                                    className={`w-full px-3 py-2 border rounded-md focus:ring-emerald-500 focus:border-emerald-500 ${errors.commodityTypeId ? 'border-red-500' : 'border-slate-300'
-                                        } ${!!formData.purchaseContractId ? 'bg-slate-100' : ''}`}
-                                >
-                                    <option value="">Select Commodity</option>
-                                    {commodityTypes.map(c => (
-                                        <option key={c.id} value={c.id}>{c.name}</option>
-                                    ))}
-                                </select>
-                                {errors.commodityTypeId && <p className="mt-1 text-xs text-red-500">{errors.commodityTypeId}</p>}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
-                                    Receiving Location *
-                                </label>
-                                <select
-                                    value={formData.locationId}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, locationId: e.target.value }))}
-                                    className={`w-full px-3 py-2 border rounded-md focus:ring-emerald-500 focus:border-emerald-500 ${errors.locationId ? 'border-red-500' : 'border-slate-300'
-                                        }`}
-                                >
-                                    <option value="">Select Location</option>
-                                    {locations.map(l => (
-                                        <option key={l.id} value={l.id}>{l.name}</option>
-                                    ))}
-                                </select>
-                                {errors.locationId && <p className="mt-1 text-xs text-red-500">{errors.locationId}</p>}
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
-                                    Crop Year / Season
-                                </label>
-                                <input
-                                    type="text"
-                                    value={formData.cropYear}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, cropYear: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500"
-                                    placeholder="e.g. 2026"
-                                />
-                            </div>
-                        </section>
-
-                        {/* Weights and Measures */}
-                        <section className="space-y-4">
-                            <h3 className="text-sm font-semibold text-slate-800 border-b pb-2 flex items-center justify-between">
-                                <span>Receipt Quantities</span>
-                                <button
-                                    type="button"
-                                    onClick={calculateWeightFromBags}
-                                    className="text-xs text-emerald-600 hover:text-emerald-700 font-medium flex items-center gap-1"
-                                >
-                                    <Calculator className="w-3 h-3" /> Calc from Bags
-                                </button>
-                            </h3>
-
-                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                                        Bag Count (pcs)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        value={formData.bagCount}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, bagCount: e.target.value }))}
-                                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500"
-                                        placeholder="e.g. 500"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                                        Weight per Bag (KG)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        step="0.1"
-                                        value={formData.bagWeight}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, bagWeight: e.target.value }))}
-                                        className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500"
-                                        placeholder="e.g. 100"
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">
-                                        Total Net Weight (MT) *
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="0.01"
-                                        step="0.01"
-                                        value={formData.receivedWeight}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, receivedWeight: e.target.value }))}
-                                        className={`w-full px-3 py-2 border rounded-md focus:ring-emerald-500 focus:border-emerald-500 font-semibold bg-emerald-50 ${errors.receivedWeight ? 'border-red-500' : 'border-emerald-200'
-                                            }`}
-                                        placeholder="e.g. 50.00"
-                                    />
-                                    {errors.receivedWeight && <p className="mt-1 text-xs text-red-500">{errors.receivedWeight}</p>}
+                                    {!formData.purchaseContractId && (
+                                        <div>
+                                            <label className="block text-sm font-bold text-slate-700 mb-2">Supplier *</label>
+                                            <select
+                                                value={formData.supplierId}
+                                                onChange={(e) => handleInputChange('supplierId', e.target.value)}
+                                                className="w-full px-4 py-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-100 outline-none"
+                                            >
+                                                <option value="">Select...</option>
+                                                {suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                            </select>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
-                        </section>
 
-                        {/* Financial Details */}
-                        <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
-                                    Cost per MT *
-                                </label>
-                                <div className="flex">
-                                    <select
-                                        value={formData.currency}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, currency: e.target.value }))}
-                                        className="px-2 py-2 border border-r-0 border-slate-300 rounded-l-md bg-slate-50 focus:ring-emerald-500 focus:border-emerald-500"
-                                    >
-                                        <option value="USD">USD</option>
-                                        <option value="NGN">NGN</option>
-                                    </select>
-                                    <input
-                                        type="number"
-                                        min="0.01"
-                                        step="0.01"
-                                        value={formData.costPerTon}
-                                        onChange={(e) => setFormData(prev => ({ ...prev, costPerTon: e.target.value }))}
-                                        className={`w-full px-3 py-2 border rounded-r-md focus:ring-emerald-500 focus:border-emerald-500 ${errors.costPerTon ? 'border-red-500' : 'border-slate-300'
-                                            }`}
-                                    />
+                            {/* Section 2: Physical Metrics */}
+                            <div className="space-y-6 bg-slate-50/50 p-8 rounded-[2rem] border border-slate-100">
+                                <h3 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                                    <Calculator className="w-4 h-4" /> 02. Physical Tonnage
+                                </h3>
+
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Received MT *</label>
+                                        <input
+                                            type="number"
+                                            value={formData.receivedWeight}
+                                            onChange={(e) => handleInputChange('receivedWeight', e.target.value)}
+                                            placeholder="0.00"
+                                            className="w-full px-4 py-4 bg-white border border-slate-200 rounded-2xl text-2xl font-black text-emerald-600 outline-none focus:ring-4 focus:ring-emerald-100 transition-all placeholder:text-slate-200"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Location</label>
+                                        <select
+                                            value={formData.locationId}
+                                            onChange={(e) => handleInputChange('locationId', e.target.value)}
+                                            className="w-full px-4 py-4 bg-white border border-slate-100 rounded-2xl font-black text-slate-800 outline-none"
+                                        >
+                                            {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                                        </select>
+                                    </div>
                                 </div>
-                                {errors.costPerTon && <p className="mt-1 text-xs text-red-500">{errors.costPerTon}</p>}
-                            </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
-                                    Received Date
-                                </label>
-                                <input
-                                    type="date"
-                                    value={formData.receivedDate}
-                                    onChange={(e) => setFormData(prev => ({ ...prev, receivedDate: e.target.value }))}
-                                    className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500"
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">
-                                    Total Value (Auto)
-                                </label>
-                                <div className="px-3 py-2 border border-transparent bg-slate-100 rounded-md text-slate-700 font-medium h-[42px] flex items-center">
-                                    {formData.currency} {((Number(formData.receivedWeight) || 0) * (Number(formData.costPerTon) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="p-4 bg-white border border-slate-100 rounded-2xl">
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Bag Count</label>
+                                        <input type="number" value={formData.bagCount} onChange={(e) => handleInputChange('bagCount', e.target.value)} className="w-full outline-none font-bold text-slate-800" placeholder="0" />
+                                    </div>
+                                    <div className="p-4 bg-white border border-slate-100 rounded-2xl">
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase mb-1">Bag Weight (KG)</label>
+                                        <input type="number" value={formData.bagWeight} onChange={(e) => handleInputChange('bagWeight', e.target.value)} className="w-full outline-none font-bold text-slate-800" placeholder="0" />
+                                    </div>
                                 </div>
                             </div>
-                        </section>
+                        </div>
 
-                        {/* Notes */}
+                        {/* Section 3: Data Integrity */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-6">
+                            <div className="p-6 bg-slate-50 rounded-2xl">
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Grade / Quality</label>
+                                <input type="text" value={formData.grade} onChange={(e) => handleInputChange('grade', e.target.value)} className="w-full bg-transparent outline-none font-bold text-slate-800 text-lg" placeholder="A1 Prime..." />
+                            </div>
+                            <div className="p-6 bg-slate-50 rounded-2xl">
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Received Date</label>
+                                <input type="date" value={formData.receivedDate} onChange={(e) => handleInputChange('receivedDate', e.target.value)} className="w-full bg-transparent outline-none font-bold text-slate-800 text-lg" />
+                            </div>
+                            <div className="p-6 bg-slate-50 rounded-2xl">
+                                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Cost Validation</label>
+                                <div className="flex items-center gap-1 font-black text-slate-800 text-lg">
+                                    <span className="text-slate-400">{formData.currency}</span>
+                                    <span>{Number(formData.costPerTon).toLocaleString()}</span>
+                                    <span className="text-xs text-slate-300 font-normal ml-auto">/ MT</span>
+                                </div>
+                            </div>
+                        </div>
+
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">
-                                Receipt Notes / Driver Information
-                            </label>
+                            <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Auditor Notes</label>
                             <textarea
                                 value={formData.notes}
-                                onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                                onChange={(e) => handleInputChange('notes', e.target.value)}
                                 rows={2}
-                                className="w-full px-3 py-2 border border-slate-300 rounded-md focus:ring-emerald-500 focus:border-emerald-500"
-                                placeholder="Truck details, driver name, condition on arrival..."
+                                className="w-full px-6 py-4 bg-slate-50 border border-slate-100 rounded-3xl outline-none focus:bg-white focus:ring-4 focus:ring-emerald-100 transition-all font-medium"
+                                placeholder="Enter any discrepancies or condition notes..."
                             />
                         </div>
                     </form>
                 </div>
 
                 {/* Footer */}
-                <div className="p-6 border-t border-slate-200 bg-slate-50 flex justify-end gap-3 rounded-b-xl">
-                    <button
-                        type="button"
-                        onClick={onCancel}
-                        className="px-4 py-2 text-slate-700 font-medium hover:bg-slate-200 rounded-md transition-colors"
-                    >
-                        Cancel
-                    </button>
-                    <button
-                        type="submit"
-                        form="grn-form"
-                        disabled={isLoading}
-                        className="px-6 py-2 bg-emerald-600 text-white font-medium rounded-md hover:bg-emerald-700 transition-all flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                    >
-                        {isLoading ? (
-                            <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                        ) : (
-                            <Save className="w-5 h-5" />
-                        )}
-                        Process Goods Receipt
-                    </button>
+                <div className="p-8 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                    <div className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                        <CheckCircle className="w-4 h-4 text-emerald-500" /> Secured Transaction Entry
+                    </div>
+                    <div className="flex items-center gap-4">
+                        <button onClick={onCancel} className="px-8 py-3 text-slate-500 font-bold hover:text-slate-900 transition-colors">Discard</button>
+                        <button
+                            type="submit"
+                            form="grn-form"
+                            disabled={isLoading}
+                            className="px-10 py-3 bg-emerald-600 text-white rounded-2xl font-black shadow-lg shadow-emerald-100 hover:bg-emerald-700 hover:scale-[1.02] active:scale-[0.98] transition-all disabled:opacity-50 flex items-center gap-2"
+                        >
+                            {isLoading ? 'Authorizing...' : 'Finalize Intake'}
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
     );
 };
+
+

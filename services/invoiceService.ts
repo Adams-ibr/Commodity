@@ -1,7 +1,7 @@
 // =====================================================
 // INVOICE SERVICE — SUPABASE
 // =====================================================
-import { dbList, dbCreate, dbUpdate, Query } from './supabaseDb';
+import { dbList, dbGet, dbCreate, dbUpdate, Query } from './supabaseDb';
 import { COLLECTIONS } from './supabaseDb';
 import { ApiResponse } from '../types_commodity';
 
@@ -23,8 +23,10 @@ export interface Invoice {
     supplierName?: string;
     salesContractId?: string;
     salesContractNumber?: string;
+    salesContractItemId?: string;
     purchaseContractId?: string;
     purchaseContractNumber?: string;
+    purchaseContractItemId?: string;
     invoiceDate: string;
     dueDate: string;
     items: InvoiceItem[];
@@ -88,8 +90,10 @@ export class InvoiceService {
                 supplierName: item.supplier_name || '',
                 salesContractId: item.sales_contract_id || '',
                 salesContractNumber: item.sales_contract_number || '',
+                salesContractItemId: item.sales_contract_item_id || '',
                 purchaseContractId: item.purchase_contract_id || '',
                 purchaseContractNumber: item.purchase_contract_number || '',
+                purchaseContractItemId: item.purchase_contract_item_id || '',
                 invoiceDate: item.invoice_date,
                 dueDate: item.due_date,
                 items: item.items ? (typeof item.items === 'string' ? JSON.parse(item.items) : item.items) : [],
@@ -117,20 +121,35 @@ export class InvoiceService {
         companyId: string = DEFAULT_COMPANY_ID
     ): Promise<ApiResponse<Invoice>> {
         try {
+            // Validate Contract status if linked
+            if (invoiceData.type === 'SALES' && invoiceData.salesContractId) {
+                const { data: contract } = await dbGet(COLLECTIONS.SALES_CONTRACTS, invoiceData.salesContractId);
+                if (!contract || contract.status !== 'ACTIVE') {
+                    return { success: false, error: 'Cannot create invoice for a sales contract that is not ACTIVE' };
+                }
+            } else if (invoiceData.type === 'PURCHASE' && invoiceData.purchaseContractId) {
+                const { data: contract } = await dbGet(COLLECTIONS.PURCHASE_CONTRACTS, invoiceData.purchaseContractId);
+                if (!contract || contract.status !== 'ACTIVE') {
+                    return { success: false, error: 'Cannot create bill for a purchase contract that is not ACTIVE' };
+                }
+            }
+
             const { data, error } = await dbCreate(COLLECTIONS.INVOICES, {
                 company_id: companyId,
                 type: invoiceData.type || 'SALES',
                 invoice_number: invoiceData.invoiceNumber,
-                buyer_id: invoiceData.buyerId || '',
+                buyer_id: invoiceData.buyerId || null,
                 buyer_name: invoiceData.buyerName || '',
                 buyer_email: invoiceData.buyerEmail || '',
                 buyer_address: invoiceData.buyerAddress || '',
-                supplier_id: invoiceData.supplierId || '',
+                supplier_id: invoiceData.supplierId || null,
                 supplier_name: invoiceData.supplierName || '',
-                sales_contract_id: invoiceData.salesContractId || '',
+                sales_contract_id: invoiceData.salesContractId || null,
                 sales_contract_number: invoiceData.salesContractNumber || '',
-                purchase_contract_id: invoiceData.purchaseContractId || '',
+                sales_contract_item_id: invoiceData.salesContractItemId || null,
+                purchase_contract_id: invoiceData.purchaseContractId || null,
                 purchase_contract_number: invoiceData.purchaseContractNumber || '',
+                purchase_contract_item_id: invoiceData.purchaseContractItemId || null,
                 invoice_date: invoiceData.invoiceDate,
                 due_date: invoiceData.dueDate,
                 items: JSON.stringify(invoiceData.items),

@@ -6,7 +6,7 @@ import {
     FileText, Plus, Search, X, Check, AlertCircle, DollarSign,
     ChevronLeft, ChevronRight, Download, Send, Eye, Clock,
     CheckCircle, XCircle, Printer, CreditCard, Receipt, Repeat,
-    User, Building, ShoppingCart, ArrowLeftRight, Package
+    User, Building, ShoppingCart, ArrowLeftRight, Package, Layers
 } from 'lucide-react';
 import { SalesContract, PurchaseContract, Buyer, Supplier, CommodityType } from '../types_commodity';
 
@@ -17,12 +17,12 @@ interface InvoiceManagerProps {
 
 const ITEMS_PER_PAGE = 20;
 
-const STATUS_CONFIG: Record<InvoiceStatus, { color: string; icon: typeof FileText; label: string }> = {
+const STATUS_CONFIG: Record<InvoiceStatus, { color: string; icon: any; label: string }> = {
     DRAFT: { color: 'bg-slate-100 text-slate-700 border-slate-200', icon: FileText, label: 'Draft' },
-    SENT: { color: 'bg-blue-100 text-blue-700 border-blue-200', icon: Send, label: 'Sent' },
-    PAID: { color: 'bg-green-100 text-green-700 border-green-200', icon: CheckCircle, label: 'Paid' },
-    OVERDUE: { color: 'bg-red-100 text-red-700 border-red-200', icon: AlertCircle, label: 'Overdue' },
-    CANCELLED: { color: 'bg-gray-100 text-gray-500 border-gray-200', icon: XCircle, label: 'Cancelled' },
+    SENT: { color: 'bg-indigo-50 text-indigo-700 border-indigo-200', icon: Send, label: 'Sent' },
+    PAID: { color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle, label: 'Paid' },
+    OVERDUE: { color: 'bg-rose-50 text-rose-700 border-rose-200', icon: AlertCircle, label: 'Overdue' },
+    CANCELLED: { color: 'bg-slate-50 text-slate-400 border-slate-100', icon: XCircle, label: 'Cancelled' },
 };
 
 export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAuditLog }) => {
@@ -35,97 +35,44 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
     const [totalRecords, setTotalRecords] = useState(0);
     const [showForm, setShowForm] = useState(false);
     const [showDetail, setShowDetail] = useState<Invoice | null>(null);
-    const [showPayment, setShowPayment] = useState<Invoice | null>(null);
-    const [paymentAmount, setPaymentAmount] = useState('');
     const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
-    // Selection data
-    const [salesContracts, setSalesContracts] = useState<SalesContract[]>([]);
-    const [purchaseContracts, setPurchaseContracts] = useState<PurchaseContract[]>([]);
-    const [buyers, setBuyers] = useState<Buyer[]>([]);
-    const [suppliers, setSuppliers] = useState<Supplier[]>([]);
-    const [isDataLoading, setIsDataLoading] = useState(false);
-
-    // Reference data
     const [salesContracts, setSalesContracts] = useState<SalesContract[]>([]);
     const [purchaseContracts, setPurchaseContracts] = useState<PurchaseContract[]>([]);
     const [buyers, setBuyers] = useState<Buyer[]>([]);
     const [suppliers, setSuppliers] = useState<Supplier[]>([]);
     const [commodityTypes, setCommodityTypes] = useState<CommodityType[]>([]);
 
-
-    // Form state
     const [formData, setFormData] = useState({
         type: 'SALES' as InvoiceType,
-        buyerId: '',
-        buyerName: '',
-        buyerEmail: '',
-        buyerAddress: '',
-        supplierId: '',
-        supplierName: '',
-        salesContractId: '',
-        salesContractNumber: '',
-        purchaseContractId: '',
-        purchaseContractNumber: '',
+        buyerId: '', buyerName: '', buyerEmail: '', buyerAddress: '',
+        supplierId: '', supplierName: '',
+        salesContractId: '', salesContractNumber: '',
+        purchaseContractId: '', purchaseContractNumber: '',
         invoiceDate: new Date().toISOString().slice(0, 10),
-        dueDate: '',
-        currency: 'USD',
-        taxRate: 0,
-        discount: 0,
-        notes: '',
-        paymentTerms: 'Net 30',
+        dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
+        currency: 'USD', taxRate: 0, discount: 0, notes: '', paymentTerms: 'Net 30',
     });
-    const [items, setItems] = useState<InvoiceItem[]>([
-        { description: '', quantity: 1, unitPrice: 0, amount: 0 }
-    ]);
+    const [items, setItems] = useState<InvoiceItem[]>([{ description: '', quantity: 0, unitPrice: 0, amount: 0 }]);
 
-    useEffect(() => { loadInvoices(); }, [page, typeFilter]);
-    useEffect(() => { setPage(1); }, [statusFilter, typeFilter]);
-    useEffect(() => {
-        if (showForm) {
-            loadSelectionData();
-        }
-    }, [showForm]);
-
-    const loadSelectionData = async () => {
-        setIsDataLoading(true);
-        try {
-            const [bRes, sRes, scRes, pcRes] = await Promise.all([
-                api.sales.getBuyers(),
-                api.procurement.getSuppliers(),
-                api.sales.getSalesContracts({ limit: 1000 }),
-                api.procurement.getPurchaseContracts()
-            ]);
-
-            if (bRes.success) setBuyers(bRes.data || []);
-            if (sRes.success) setSuppliers(sRes.data || []);
-            if (scRes.success) setSalesContracts(scRes.data?.data || []);
-            if (pcRes.success) setPurchaseContracts(pcRes.data || []);
-        } catch (e) {
-            console.error('Failed to load selection data', e);
-        }
-        setIsDataLoading(false);
-    };
-    useEffect(() => { loadReferenceData(); }, []);
+    useEffect(() => { loadInvoices(); }, [page, typeFilter, statusFilter]);
+    useEffect(() => { if (showForm) loadReferenceData(); }, [showForm]);
 
     const loadReferenceData = async () => {
         try {
             const [sc, pc, b, s, ct] = await Promise.all([
-                api.sales.getSalesContracts(),
-                api.procurement.getPurchaseContracts(),
+                api.sales.getSalesContracts({ limit: 1000, includeItems: true }),
+                api.procurement.getPurchaseContracts({ includeItems: true }),
                 api.sales.getBuyers(),
                 api.procurement.getSuppliers(),
                 api.commodityMaster.getCommodityTypes()
             ]);
-
             if (sc.success) setSalesContracts(sc.data?.data || []);
             if (pc.success) setPurchaseContracts(pc.data || []);
             if (b.success) setBuyers(b.data || []);
             if (s.success) setSuppliers(s.data || []);
             if (ct.success) setCommodityTypes(ct.data || []);
-        } catch (err) {
-            console.error('Failed to load reference data:', err);
-        }
+        } catch (e) { console.error(e); }
     };
 
     const loadInvoices = async () => {
@@ -144,677 +91,270 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
         setIsLoading(false);
     };
 
-    const showMsg = (type: 'success' | 'error', text: string) => {
-        setMessage({ type, text });
-        setTimeout(() => setMessage(null), 4000);
-    };
-
-    // Computed values
-    const filteredInvoices = useMemo(() => {
-        if (!searchTerm) return invoices;
-        const q = searchTerm.toLowerCase();
-        return invoices.filter(inv =>
-            inv.invoiceNumber.toLowerCase().includes(q) ||
-            inv.buyerName?.toLowerCase().includes(q) ||
-            inv.supplierName?.toLowerCase().includes(q)
-        );
-    }, [invoices, searchTerm]);
-
-    const totalPages = Math.max(1, Math.ceil(totalRecords / ITEMS_PER_PAGE));
-
-    const stats = useMemo(() => {
-        const total = invoices.length;
-        const totalAmount = invoices.reduce((s, i) => s + i.totalAmount, 0);
-        const totalPaid = invoices.reduce((s, i) => s + i.amountPaid, 0);
-        const totalOutstanding = invoices.reduce((s, i) => s + i.balanceDue, 0);
-        const overdue = invoices.filter(i => i.status === 'OVERDUE').length;
-        return { total, totalAmount, totalPaid, totalOutstanding, overdue };
-    }, [invoices]);
-
-    // Item management
-    const updateItem = (index: number, field: keyof InvoiceItem, value: any) => {
-        const updated = [...items];
-        (updated[index] as any)[field] = value;
-        if (field === 'quantity' || field === 'unitPrice') {
-            updated[index].amount = updated[index].quantity * updated[index].unitPrice;
+    const handleContractSelection = (id: string, type: 'SALES' | 'PURCHASE') => {
+        if (!id) return;
+        if (type === 'SALES') {
+            const contract = salesContracts.find(c => c.id === id);
+            if (!contract) return;
+            const buyer = buyers.find(b => b.id === contract.buyerId);
+            setFormData(prev => ({
+                ...prev,
+                salesContractId: contract.id,
+                salesContractNumber: contract.contractNumber,
+                buyerId: contract.buyerId,
+                buyerName: buyer?.name || '',
+                buyerEmail: buyer?.email || '',
+                currency: contract.currency
+            }));
+            const contractItems = (contract as any).items || [];
+            setItems(contractItems.map((item: any) => ({
+                description: `${commodityTypes.find(ct => ct.id === item.commodityTypeId)?.name || 'Commodity'} - ${item.grade || 'Std'}`,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                amount: item.quantity * item.unitPrice,
+                salesContractItemId: item.id
+            })));
+        } else {
+            const contract = purchaseContracts.find(c => c.id === id);
+            if (!contract) return;
+            const supplier = suppliers.find(s => s.id === contract.supplierId);
+            setFormData(prev => ({
+                ...prev,
+                purchaseContractId: contract.id,
+                purchaseContractNumber: contract.contractNumber,
+                supplierId: contract.supplierId,
+                supplierName: supplier?.name || '',
+                currency: contract.currency
+            }));
+            const contractItems = (contract as any).items || [];
+            setItems(contractItems.map((item: any) => ({
+                description: `${commodityTypes.find(ct => ct.id === item.commodityTypeId)?.name || 'Commodity'} - ${item.grade || 'Std'}`,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                amount: item.quantity * item.unitPrice,
+                purchaseContractItemId: item.id
+            })));
         }
-        setItems(updated);
     };
 
-    const addItem = () => setItems([...items, { description: '', quantity: 1, unitPrice: 0, amount: 0 }]);
-    const removeItem = (i: number) => items.length > 1 && setItems(items.filter((_, idx) => idx !== i));
-
-    const subtotal = items.reduce((s, i) => s + i.amount, 0);
-    const taxAmount = subtotal * (formData.taxRate / 100);
-    const totalAmount = subtotal + taxAmount - formData.discount;
-
-    // Create invoice
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (items.some(i => !i.description || i.amount <= 0)) {
-            showMsg('error', 'All items must have a description and positive amount');
-            return;
-        }
+        const subtotal = items.reduce((s, i) => s + i.amount, 0);
+        const taxAmount = subtotal * (formData.taxRate / 100);
+        const totalAmount = subtotal + taxAmount - formData.discount;
 
-        const invoiceNumber = `${formData.type === 'SALES' ? 'INV' : 'BILL'}-${Date.now().toString().slice(-8)}`;
         try {
             const res = await api.invoices.createInvoice({
-                companyId: '',
-                type: formData.type,
-                invoiceNumber,
-                buyerId: formData.type === 'SALES' ? formData.buyerId : undefined,
-                buyerName: formData.type === 'SALES' ? formData.buyerName : undefined,
-                buyerEmail: formData.buyerEmail,
-                buyerAddress: formData.buyerAddress,
-                supplierId: formData.type === 'PURCHASE' ? formData.supplierId : undefined,
-                supplierName: formData.type === 'PURCHASE' ? formData.supplierName : undefined,
-                salesContractId: formData.salesContractId,
-                salesContractNumber: formData.salesContractNumber,
-                purchaseContractId: formData.purchaseContractId,
-                purchaseContractNumber: formData.purchaseContractNumber,
-                invoiceDate: formData.invoiceDate,
-                dueDate: formData.dueDate,
+                ...formData,
                 items,
                 subtotal,
-                taxRate: formData.taxRate,
                 taxAmount,
-                discount: formData.discount,
                 totalAmount,
                 amountPaid: 0,
                 balanceDue: totalAmount,
-                currency: formData.currency,
-                notes: formData.notes,
-                paymentTerms: formData.paymentTerms,
-                status: 'DRAFT' as InvoiceStatus,
-                createdBy: 'system',
+                status: 'DRAFT',
+                createdBy: 'system'
             });
             if (res.success) {
-                showMsg('success', `${formData.type === 'SALES' ? 'Invoice' : 'Bill'} ${invoiceNumber} created`);
-                onAuditLog?.('INVOICE_CREATE', `Created ${formData.type} ${invoiceNumber} for ${formData.type === 'SALES' ? formData.buyerName : formData.supplierName}`);
                 setShowForm(false);
-                resetForm();
                 loadInvoices();
+                if (onAuditLog) onAuditLog('INVOICE_CREATE', `Created invoice for ${formData.salesContractNumber || formData.purchaseContractNumber}`);
             } else {
-                showMsg('error', res.error || 'Failed to create invoice');
+                alert(res.error || 'Failed to create');
             }
-        } catch { showMsg('error', 'Failed to create invoice'); }
+        } catch (e) { console.error(e); }
     };
 
-    const resetForm = () => {
-        setFormData({
-            type: 'SALES',
-            buyerId: '', buyerName: '', buyerEmail: '', buyerAddress: '',
-            supplierId: '', supplierName: '',
-            salesContractId: '', salesContractNumber: '',
-            purchaseContractId: '', purchaseContractNumber: '',
-            invoiceDate: new Date().toISOString().slice(0, 10), dueDate: '',
-            currency: 'USD', taxRate: 0, discount: 0, notes: '', paymentTerms: 'Net 30'
-        });
-        setItems([{ description: '', quantity: 1, unitPrice: 0, amount: 0 }]);
+    const updateItem = (index: number, field: string, value: any) => {
+        const newItems = [...items];
+        (newItems[index] as any)[field] = value;
+        if (field === 'quantity' || field === 'unitPrice') {
+            newItems[index].amount = newItems[index].quantity * newItems[index].unitPrice;
+        }
+        setItems(newItems);
     };
 
-    // Status updates
-    const handleStatusUpdate = async (invoice: Invoice, newStatus: InvoiceStatus) => {
-        const res = await api.invoices.updateInvoice(invoice.id, { status: newStatus });
-        if (res.success) {
-            showMsg('success', `Invoice ${invoice.invoiceNumber} marked as ${newStatus}`);
-            onAuditLog?.('INVOICE_STATUS', `Updated ${invoice.invoiceNumber} to ${newStatus}`);
-            loadInvoices();
-            if (showDetail?.id === invoice.id) setShowDetail({ ...invoice, status: newStatus });
-        } else { showMsg('error', 'Status update failed'); }
-    };
-
-    // Record payment
-    const handleRecordPayment = async () => {
-        if (!showPayment || !paymentAmount || Number(paymentAmount) <= 0) return;
-        const res = await api.invoices.recordPayment(showPayment.id, Number(paymentAmount), showPayment);
-        if (res.success) {
-            showMsg('success', `Payment of ${showPayment.currency} ${Number(paymentAmount).toLocaleString()} recorded`);
-            onAuditLog?.('INVOICE_PAYMENT', `Recorded payment on ${showPayment.invoiceNumber}`);
-            setShowPayment(null);
-            setPaymentAmount('');
-            loadInvoices();
-        } else { showMsg('error', 'Payment recording failed'); }
-    };
-
-    const formatCurrency = (amount: number, currency: string = 'USD') =>
-        `${currency} ${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-
-    const formatDate = (d: string | null) => {
-        if (!d) return '—';
-        return new Date(d).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' });
-    };
-
-    // ─── Render ──────────────────────────────────────────
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
+        <div className="space-y-8">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-6">
                 <div>
-                    <h2 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                        <Receipt className="w-8 h-8 text-indigo-600" />
-                        Invoice Management
-                    </h2>
-                    <p className="text-slate-500 mt-1">Create, track, and manage invoices and payments</p>
+                    <h2 className="text-3xl font-black text-slate-900 tracking-tight">Financial Clearing</h2>
+                    <p className="text-slate-500 font-medium">Link trade agreements to billing and receivables</p>
                 </div>
                 <button
-                    onClick={() => { resetForm(); setShowForm(true); }}
-                    className="bg-indigo-600 text-white px-5 py-2.5 rounded-lg hover:bg-indigo-700 flex items-center gap-2 font-medium shadow-sm transition-all hover:shadow-md"
+                    onClick={() => { setShowForm(true); }}
+                    className="bg-indigo-600 text-white px-6 py-3 rounded-2xl flex items-center justify-center gap-2 hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 font-bold"
                 >
-                    <Plus className="w-5 h-5" />
-                    New Invoice
+                    <Plus size={20} />
+                    <span>Issue Invoice</span>
                 </button>
             </div>
 
-            {/* Stats */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-indigo-100 flex items-center justify-center">
-                        <FileText className="w-6 h-6 text-indigo-600" />
-                    </div>
-                    <div>
-                        <p className="text-2xl font-bold text-slate-800">{stats.total}</p>
-                        <p className="text-sm text-slate-500">Total Invoices</p>
-                    </div>
-                </div>
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-emerald-100 flex items-center justify-center">
-                        <DollarSign className="w-6 h-6 text-emerald-600" />
-                    </div>
-                    <div>
-                        <p className="text-lg font-bold text-slate-800">{formatCurrency(stats.totalPaid)}</p>
-                        <p className="text-sm text-slate-500">Total Received</p>
-                    </div>
-                </div>
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-amber-100 flex items-center justify-center">
-                        <Clock className="w-6 h-6 text-amber-600" />
-                    </div>
-                    <div>
-                        <p className="text-lg font-bold text-slate-800">{formatCurrency(stats.totalOutstanding)}</p>
-                        <p className="text-sm text-slate-500">Outstanding</p>
-                    </div>
-                </div>
-                <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-5 flex items-center gap-4">
-                    <div className="w-12 h-12 rounded-xl bg-red-100 flex items-center justify-center">
-                        <AlertCircle className="w-6 h-6 text-red-600" />
-                    </div>
-                    <div>
-                        <p className="text-2xl font-bold text-slate-800">{stats.overdue}</p>
-                        <p className="text-sm text-slate-500">Overdue</p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Message */}
-            {message && (
-                <div className={`p-4 rounded-lg flex items-center gap-2 ${message.type === 'success'
-                    ? 'bg-green-50 text-green-700 border border-green-200'
-                    : 'bg-red-50 text-red-700 border border-red-200'
-                    }`}>
-                    {message.type === 'success' ? <Check className="w-5 h-5" /> : <AlertCircle className="w-5 h-5" />}
-                    {message.text}
-                </div>
-            )}
-
-            {/* Filters */}
-            <div className="flex flex-col sm:flex-row gap-3">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400 w-5 h-5" />
+            <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1 relative">
+                    <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
                         type="text"
+                        placeholder="Search invoices..."
+                        className="w-full pl-11 pr-4 py-3 bg-white border border-slate-200 rounded-2xl outline-none"
                         value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        placeholder="Search by number or entity…"
-                        className="w-full pl-10 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
+                        onChange={e => setSearchTerm(e.target.value)}
                     />
                 </div>
                 <select
                     value={typeFilter}
-                    onChange={(e) => setTypeFilter(e.target.value as any)}
-                    className="px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white min-w-[140px]"
+                    onChange={e => setTypeFilter(e.target.value as any)}
+                    className="px-6 py-3 bg-white border border-slate-200 rounded-2xl font-bold text-slate-700 outline-none"
                 >
                     <option value="all">All Types</option>
-                    <option value="SALES">Sales (Receivable)</option>
-                    <option value="PURCHASE">Purchase (Payable)</option>
-                </select>
-                <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as InvoiceStatus | 'all')}
-                    className="px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white min-w-[140px]"
-                >
-                    <option value="all">All Status</option>
-                    <option value="DRAFT">Draft</option>
-                    <option value="SENT">Sent</option>
-                    <option value="PAID">Paid</option>
-                    <option value="OVERDUE">Overdue</option>
-                    <option value="CANCELLED">Cancelled</option>
+                    <option value="SALES">Receivables</option>
+                    <option value="PURCHASE">Payables</option>
                 </select>
             </div>
 
-            {/* Invoice Table */}
-            <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
-                {isLoading ? (
-                    <div className="flex items-center justify-center py-20">
-                        <div className="w-10 h-10 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin" />
-                    </div>
-                ) : filteredInvoices.length === 0 ? (
-                    <div className="text-center py-20">
-                        <Receipt className="w-16 h-16 text-slate-300 mx-auto mb-4" />
-                        <h3 className="text-xl font-medium text-slate-700">No Invoices Found</h3>
-                        <p className="text-slate-500 mt-2">Filter might be too restrictive or no data yet</p>
-                    </div>
-                ) : (
-                    <>
-                        <div className="overflow-x-auto">
-                            <table className="min-w-full divide-y divide-slate-200">
-                                <thead className="bg-slate-50">
-                                    <tr>
-                                        <th className="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Type</th>
-                                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Document</th>
-                                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Entity</th>
-                                        <th className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase">Date</th>
-                                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Amount</th>
-                                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Paid</th>
-                                        <th className="px-4 py-3 text-center text-xs font-semibold text-slate-500 uppercase">Status</th>
-                                        <th className="px-4 py-3 text-right text-xs font-semibold text-slate-500 uppercase">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-slate-100">
-                                    {filteredInvoices.map(inv => {
-                                        const cfg = STATUS_CONFIG[inv.status];
-                                        return (
-                                            <tr key={inv.id} className="hover:bg-indigo-50/40 transition-colors">
-                                                <td className="px-6 py-4">
-                                                    <span className={`inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider ${inv.type === 'SALES' ? 'bg-indigo-100 text-indigo-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                                        {inv.type}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <div className="font-bold text-slate-800 text-sm">{inv.invoiceNumber}</div>
-                                                    {(inv.salesContractNumber || inv.purchaseContractNumber) && (
-                                                        <div className="text-xs text-slate-500 mt-0.5 flex items-center gap-1">
-                                                            <Package className="w-3 h-3" />
-                                                            Contract: {inv.salesContractNumber || inv.purchaseContractNumber}
-                                                        </div>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <div className="text-sm font-medium text-slate-800 flex items-center gap-1">
-                                                        {inv.type === 'SALES' ? <User className="w-3 h-3 text-slate-400" /> : <Building className="w-3 h-3 text-slate-400" />}
-                                                        {inv.buyerName || inv.supplierName}
-                                                    </div>
-                                                    {inv.buyerEmail && <div className="text-xs text-slate-500">{inv.buyerEmail}</div>}
-                                                </td>
-                                                <td className="px-4 py-4">
-                                                    <div className="text-sm text-slate-700">{formatDate(inv.invoiceDate)}</div>
-                                                    <div className="text-xs text-slate-500">Due: {formatDate(inv.dueDate)}</div>
-                                                </td>
-                                                <td className="px-4 py-4 text-right">
-                                                    <div className="text-sm font-bold text-slate-800">{formatCurrency(inv.totalAmount, inv.currency)}</div>
-                                                </td>
-                                                <td className="px-4 py-4 text-right">
-                                                    <div className="text-sm font-medium text-green-700">{formatCurrency(inv.amountPaid, inv.currency)}</div>
-                                                    {inv.balanceDue > 0 && (
-                                                        <div className="text-xs text-red-500">Bal: {formatCurrency(inv.balanceDue, inv.currency)}</div>
-                                                    )}
-                                                </td>
-                                                <td className="px-4 py-4 text-center">
-                                                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold border ${cfg.color}`}>
-                                                        {cfg.label}
-                                                    </span>
-                                                </td>
-                                                <td className="px-4 py-4 text-right">
-                                                    <div className="flex items-center justify-end gap-1">
-                                                        <button onClick={() => setShowDetail(inv)} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors" title="View">
-                                                            <Eye className="w-4 h-4" />
-                                                        </button>
-                                                        {inv.status === 'DRAFT' && (
-                                                            <button onClick={() => handleStatusUpdate(inv, 'SENT')} className="p-1.5 text-slate-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors" title="Mark as Sent">
-                                                                <Send className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        {(inv.status === 'SENT' || inv.status === 'OVERDUE') && (
-                                                            <button onClick={() => { setShowPayment(inv); setPaymentAmount(''); }} className="p-1.5 text-slate-400 hover:text-green-600 hover:bg-green-50 rounded-lg transition-colors" title="Record Payment">
-                                                                <CreditCard className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                        {inv.status !== 'PAID' && inv.status !== 'CANCELLED' && (
-                                                            <button onClick={() => handleStatusUpdate(inv, 'CANCELLED')} className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors" title="Cancel">
-                                                                <XCircle className="w-4 h-4" />
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                            </table>
-                        </div>
-                        {totalPages > 1 && (
-                            <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 bg-slate-50/50">
-                                <span className="text-sm text-slate-500">
-                                    Showing {((page - 1) * ITEMS_PER_PAGE) + 1}–{Math.min(page * ITEMS_PER_PAGE, totalRecords)} of {totalRecords}
-                                </span>
-                                <div className="flex items-center gap-2">
-                                    <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page <= 1} className="p-2 rounded-lg border border-slate-300 text-slate-600 disabled:opacity-40 hover:bg-white transition-colors">
-                                        <ChevronLeft className="w-4 h-4" />
+            <div className="bg-white rounded-[2.5rem] shadow-xl shadow-slate-200/40 border border-slate-100 overflow-hidden">
+                <table className="w-full text-left border-collapse">
+                    <thead>
+                        <tr className="bg-slate-50/50">
+                            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Billing Info</th>
+                            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest">Linked Trade</th>
+                            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Value</th>
+                            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-center">Status</th>
+                            <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                        {invoices.filter(i => i.invoiceNumber.toLowerCase().includes(searchTerm.toLowerCase())).map(invoice => (
+                            <tr key={invoice.id} className="hover:bg-slate-50/50 transition-colors group">
+                                <td className="px-8 py-6">
+                                    <div className="font-black text-slate-900 mb-1">{invoice.invoiceNumber}</div>
+                                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">{invoice.buyerName || invoice.supplierName}</div>
+                                </td>
+                                <td className="px-8 py-6">
+                                    <div className="flex items-center gap-2">
+                                        <Package className="w-3 h-3 text-indigo-500" />
+                                        <div className="text-sm font-black text-slate-700 uppercase">{invoice.salesContractNumber || invoice.purchaseContractNumber || 'No Link'}</div>
+                                    </div>
+                                </td>
+                                <td className="px-8 py-6 text-right">
+                                    <div className="font-black text-slate-900">{invoice.currency} {invoice.totalAmount.toLocaleString()}</div>
+                                    <div className="text-[10px] font-bold text-slate-400 uppercase italic">Due: {new Date(invoice.dueDate).toLocaleDateString()}</div>
+                                </td>
+                                <td className="px-8 py-6 text-center">
+                                    <span className={`inline-flex px-3 py-1 text-[10px] font-black rounded-full border border-dashed ${STATUS_CONFIG[invoice.status].color}`}>
+                                        {invoice.status}
+                                    </span>
+                                </td>
+                                <td className="px-8 py-6 text-right">
+                                    <button onClick={() => setShowDetail(invoice)} className="p-2.5 text-slate-400 hover:bg-slate-100 hover:text-indigo-600 rounded-xl transition-all">
+                                        <Eye className="w-5 h-5" />
                                     </button>
-                                    <span className="text-sm font-medium text-slate-700 min-w-[80px] text-center">Page {page} of {totalPages}</span>
-                                    <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page >= totalPages} className="p-2 rounded-lg border border-slate-300 text-slate-600 disabled:opacity-40 hover:bg-white transition-colors">
-                                        <ChevronRight className="w-4 h-4" />
-                                    </button>
-                                </div>
-                            </div>
-                        )}
-                    </>
-                )}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
 
-            {/* ─── Create Invoice Modal ───────────────────── */}
+            {/* Modal Form */}
             {showForm && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowForm(false)}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl mx-4 max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-indigo-600 to-violet-600 p-6 text-white flex-shrink-0">
-                            <div className="flex items-center justify-between">
-                                <div>
-                                    <h3 className="text-lg font-bold">Create New Invoice</h3>
-                                    <p className="text-indigo-200 text-sm mt-1">Add line items, tax, and payment terms</p>
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl w-full max-w-4xl max-h-[92vh] overflow-hidden flex flex-col border border-slate-100 transition-all animate-in zoom-in-95 duration-200">
+                        <div className="p-8 border-b border-slate-100 flex items-center justify-between">
+                            <div className="flex items-center gap-4">
+                                <div className="w-12 h-12 rounded-2xl bg-indigo-600 flex items-center justify-center shadow-lg shadow-indigo-100 text-white">
+                                    <Receipt className="w-6 h-6" />
                                 </div>
-                                <button onClick={() => setShowForm(false)} className="text-white/70 hover:text-white"><X className="w-6 h-6" /></button>
+                                <h3 className="text-2xl font-black text-slate-900 tracking-tight">Issue New Instrument</h3>
                             </div>
+                            <button onClick={() => setShowForm(false)} className="p-2 text-slate-400 hover:text-rose-500 transition-colors"><X size={24} /></button>
                         </div>
-                        <form onSubmit={handleCreate} className="p-6 space-y-5 overflow-y-auto flex-1">
-                            {/* Type Selector */}
-                            <div className="flex bg-slate-100 p-1 rounded-xl gap-1">
-                                <button type="button" onClick={() => setFormData({ ...formData, type: 'SALES' })}
-                                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${formData.type === 'SALES' ? 'bg-white shadow-sm text-indigo-600' : 'text-slate-500 hover:text-slate-700'}`}>
-                                    <ShoppingCart className="w-4 h-4" /> Sales Invoice
-                                </button>
-                                <button type="button" onClick={() => setFormData({ ...formData, type: 'PURCHASE' })}
-                                    className={`flex-1 flex items-center justify-center gap-2 py-2 rounded-lg text-sm font-bold transition-all ${formData.type === 'PURCHASE' ? 'bg-white shadow-sm text-emerald-600' : 'text-slate-500 hover:text-slate-700'}`}>
-                                    <Repeat className="w-4 h-4" /> Purchase Bill
-                                </button>
-                            </div>
 
-                            {/* Entity Info */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                {formData.type === 'SALES' ? (
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Buyer Name *</label>
-                                        <input type="text" required value={formData.buyerName} onChange={e => setFormData({ ...formData, buyerName: e.target.value })}
-                                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Company Ltd" />
+                        <form onSubmit={handleCreate} className="p-10 overflow-y-auto space-y-10">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                                <div className="space-y-6">
+                                    <div className="flex bg-slate-50 p-1.5 rounded-2xl gap-2 border border-slate-100">
+                                        <button type="button" onClick={() => setFormData({ ...formData, type: 'SALES' })}
+                                            className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${formData.type === 'SALES' ? 'bg-white shadow-xl text-indigo-600 border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}>
+                                            Receivable
+                                        </button>
+                                        <button type="button" onClick={() => setFormData({ ...formData, type: 'PURCHASE' })}
+                                            className={`flex-1 py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all ${formData.type === 'PURCHASE' ? 'bg-white shadow-xl text-emerald-600 border border-slate-100' : 'text-slate-400 hover:text-slate-600'}`}>
+                                            Payable
+                                        </button>
                                     </div>
-                                ) : (
+
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Supplier Name *</label>
-                                        <input type="text" required value={formData.supplierName} onChange={e => setFormData({ ...formData, supplierName: e.target.value })}
-                                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500" placeholder="Supplier Global" />
+                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Linked Contract Authorization *</label>
+                                        <select
+                                            value={formData.type === 'SALES' ? formData.salesContractId : formData.purchaseContractId}
+                                            onChange={e => handleContractSelection(e.target.value, formData.type)}
+                                            className="w-full px-5 py-4 bg-slate-50 border border-slate-100 rounded-2xl font-bold text-slate-800 outline-none focus:ring-4 focus:ring-indigo-50 focus:bg-white transition-all shadow-sm"
+                                        >
+                                            <option value="">Select ACTIVE contract...</option>
+                                            {formData.type === 'SALES'
+                                                ? salesContracts.filter(c => c.status === 'ACTIVE').map(c => <option key={c.id} value={c.id}>{c.contractNumber} — {c.buyerId}</option>)
+                                                : purchaseContracts.filter(c => c.status === 'ACTIVE').map(c => <option key={c.id} value={c.id}>{c.contractNumber} — {c.supplierId}</option>)
+                                            }
+                                        </select>
                                     </div>
-                                )}
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">{formData.type === 'SALES' ? 'Buyer' : 'Supplier'} Email</label>
-                                    <input type="email" value={formData.buyerEmail} onChange={e => setFormData({ ...formData, buyerEmail: e.target.value })}
-                                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="contact@email.com" />
+                                </div>
+
+                                <div className="space-y-6 bg-slate-50/50 p-8 rounded-[2rem] border border-slate-100">
+                                    <div className="grid grid-cols-2 gap-6">
+                                        <div>
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Issue Date</label>
+                                            <input type="date" value={formData.invoiceDate} onChange={e => setFormData({ ...formData, invoiceDate: e.target.value })} className="w-full bg-white border border-slate-100 px-4 py-3 rounded-xl font-bold text-slate-800 outline-none shadow-sm" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Due Date</label>
+                                            <input type="date" value={formData.dueDate} onChange={e => setFormData({ ...formData, dueDate: e.target.value })} className="w-full bg-white border border-slate-100 px-4 py-3 rounded-xl font-bold text-slate-800 outline-none shadow-sm" />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">{formData.type === 'SALES' ? 'Buyer' : 'Supplier'} Address</label>
-                                <input type="text" value={formData.buyerAddress} onChange={e => setFormData({ ...formData, buyerAddress: e.target.value })}
-                                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="123 Street Address" />
-                            </div>
-                            {/* Contracts */}
-                            <div className="grid grid-cols-1 gap-4">
-                                {formData.type === 'SALES' ? (
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Select Sales Contract</label>
-                                        <select
-                                            value={formData.salesContractId}
-                                            onChange={(e) => {
-                                                const contract = salesContracts.find(c => c.id === e.target.value);
-                                                if (contract) {
-                                                    const buyer = buyers.find(b => b.id === contract.buyerId);
-                                                    const commodity = commodityTypes.find(ct => ct.id === contract.commodityTypeId);
-                                                    setFormData({
-                                                        ...formData,
-                                                        salesContractId: contract.id,
-                                                        salesContractNumber: contract.contractNumber,
-                                                        buyerId: contract.buyerId,
-                                                        buyerName: buyer?.name || '',
-                                                        buyerEmail: buyer?.email || '',
-                                                        buyerAddress: buyer?.address ? (typeof buyer.address === 'string' ? buyer.address : buyer.address.street) : '',
-                                                        currency: contract.currency || 'USD',
-                                                        paymentTerms: contract.paymentTerms || 'Net 30'
-                                                    });
-                                                    setItems([{
-                                                        description: `${commodity?.name || 'Commodity'} - Contract Fulfillment (${contract.contractNumber})`,
-                                                        quantity: contract.contractedQuantity - contract.shippedQuantity,
-                                                        unitPrice: contract.pricePerTon,
-                                                        amount: (contract.contractedQuantity - contract.shippedQuantity) * contract.pricePerTon
-                                                    }]);
-                                                }
-                                            }}
-                                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white"
-                                        >
-                                            <option value="">-- Choose existing contract --</option>
-                                            {salesContracts.map(c => (
-                                                <option key={c.id} value={c.id}>{c.contractNumber} - {buyers.find(b => b.id === c.buyerId)?.name} ({c.status})</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                ) : (
-                                    <div>
-                                        <label className="block text-sm font-medium text-slate-700 mb-1">Select Purchase Contract</label>
-                                        <select
-                                            value={formData.purchaseContractId}
-                                            onChange={(e) => {
-                                                const contract = purchaseContracts.find(c => c.id === e.target.value);
-                                                if (contract) {
-                                                    const supplier = suppliers.find(s => s.id === contract.supplierId);
-                                                    const commodity = commodityTypes.find(ct => ct.id === contract.commodityTypeId);
-                                                    setFormData({
-                                                        ...formData,
-                                                        purchaseContractId: contract.id,
-                                                        purchaseContractNumber: contract.contractNumber,
-                                                        supplierId: contract.supplierId,
-                                                        supplierName: supplier?.name || '',
-                                                        buyerEmail: supplier?.email || '', // Reusing email for simplicity
-                                                        buyerAddress: supplier?.address ? (typeof supplier.address === 'string' ? supplier.address : supplier.address.street) : '',
-                                                        currency: contract.currency || 'USD',
-                                                        paymentTerms: contract.paymentTerms || 'Net 15'
-                                                    });
-                                                    setItems([{
-                                                        description: `${commodity?.name || 'Commodity'} - Purchase Fulfillment (${contract.contractNumber})`,
-                                                        quantity: contract.contractedQuantity - contract.deliveredQuantity,
-                                                        unitPrice: contract.pricePerTon,
-                                                        amount: (contract.contractedQuantity - contract.deliveredQuantity) * contract.pricePerTon
-                                                    }]);
-                                                }
-                                            }}
-                                            className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
-                                        >
-                                            <option value="">-- Choose existing contract --</option>
-                                            {purchaseContracts.map(c => (
-                                                <option key={c.id} value={c.id}>{c.contractNumber} - {suppliers.find(s => s.id === c.supplierId)?.name} ({c.status})</option>
-                                            ))}
-                                        </select>
-                                    </div>
-                                )}
-                            </div>
 
-                            {/* Line Items */}
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-2">Line Items</label>
-                                <div className="space-y-2">
+                            <div className="space-y-4">
+                                <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                                    <Layers className="w-4 h-4 text-indigo-500" /> Line Item Decoupling
+                                </h4>
+                                <div className="space-y-3">
                                     {items.map((item, i) => (
-                                        <div key={i} className="flex gap-2 items-start">
-                                            <input type="text" placeholder="Description" required value={item.description} onChange={e => updateItem(i, 'description', e.target.value)}
-                                                className="flex-1 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                                            <input type="number" placeholder="Qty" required min={1} value={item.quantity} onChange={e => updateItem(i, 'quantity', Number(e.target.value))}
-                                                className="w-20 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                                            <input type="number" placeholder="Unit Price" required min={0} step="0.01" value={item.unitPrice || ''} onChange={e => updateItem(i, 'unitPrice', Number(e.target.value))}
-                                                className="w-28 px-3 py-2 border border-slate-300 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                                            <span className="w-24 py-2 text-sm font-medium text-slate-700 text-right">{item.amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                                            <button type="button" onClick={() => removeItem(i)} className="p-2 text-slate-400 hover:text-red-500"><X className="w-4 h-4" /></button>
+                                        <div key={i} className="flex gap-4 p-4 bg-slate-50/50 rounded-2xl items-center border border-slate-50 transition-all hover:bg-white hover:border-slate-200">
+                                            <div className="flex-1">
+                                                <input type="text" value={item.description} onChange={e => updateItem(i, 'description', e.target.value)} className="w-full bg-transparent outline-none font-bold text-slate-800" placeholder="Item description..." />
+                                                <div className="text-[10px] font-black text-slate-300 uppercase mt-1">Contract ID: {item.salesContractItemId || item.purchaseContractItemId || 'SPOT'}</div>
+                                            </div>
+                                            <div className="w-24 px-4 py-2 bg-white rounded-xl border border-slate-100 border-dashed">
+                                                <div className="text-[10px] font-black text-slate-300 uppercase mb-1">Quantity</div>
+                                                <input type="number" value={item.quantity} onChange={e => updateItem(i, 'quantity', Number(e.target.value))} className="w-full bg-transparent outline-none font-black text-slate-800" />
+                                            </div>
+                                            <div className="w-32 px-4 py-2 bg-white rounded-xl border border-slate-100 border-dashed">
+                                                <div className="text-[10px] font-black text-slate-300 uppercase mb-1">Price</div>
+                                                <input type="number" value={item.unitPrice} onChange={e => updateItem(i, 'unitPrice', Number(e.target.value))} className="w-full bg-transparent outline-none font-black text-slate-800" />
+                                            </div>
+                                            <div className="w-32 text-right">
+                                                <div className="text-[10px] font-black text-slate-300 uppercase mb-1">Subtotal</div>
+                                                <div className="font-black text-slate-900">{formData.currency} {item.amount.toLocaleString()}</div>
+                                            </div>
+                                            <button type="button" onClick={() => setItems(items.filter((_, idx) => idx !== i))} className="p-2 text-slate-200 hover:text-rose-500 transition-colors"><X size={18} /></button>
                                         </div>
                                     ))}
+                                    <button type="button" onClick={() => setItems([...items, { description: '', quantity: 0, unitPrice: 0, amount: 0 }])} className="w-full py-4 border-2 border-dashed border-slate-100 rounded-2xl text-[10px] font-black text-slate-400 uppercase tracking-widest hover:border-indigo-100 hover:text-indigo-400 transition-all">+ Add Supplemental Charge</button>
                                 </div>
-                                <button type="button" onClick={addItem} className="mt-2 text-sm text-indigo-600 hover:text-indigo-800 font-medium flex items-center gap-1">
-                                    <Plus className="w-4 h-4" /> Add Line Item
-                                </button>
-                            </div>
-
-                            {/* Tax & Discount */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Tax Rate (%)</label>
-                                    <input type="number" min={0} max={100} step="0.5" value={formData.taxRate} onChange={e => setFormData({ ...formData, taxRate: Number(e.target.value) })}
-                                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                                </div>
-                                <div>
-                                    <label className="block text-sm font-medium text-slate-700 mb-1">Discount</label>
-                                    <input type="number" min={0} step="0.01" value={formData.discount} onChange={e => setFormData({ ...formData, discount: Number(e.target.value) })}
-                                        className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" />
-                                </div>
-                            </div>
-
-                            {/* Totals */}
-                            <div className="bg-slate-50 p-4 rounded-lg space-y-2 text-sm">
-                                <div className="flex justify-between"><span className="text-slate-600">Subtotal</span><span className="font-medium">{formatCurrency(subtotal, formData.currency)}</span></div>
-                                {formData.taxRate > 0 && <div className="flex justify-between"><span className="text-slate-600">Tax ({formData.taxRate}%)</span><span className="font-medium">{formatCurrency(taxAmount, formData.currency)}</span></div>}
-                                {formData.discount > 0 && <div className="flex justify-between"><span className="text-slate-600">Discount</span><span className="font-medium text-red-600">-{formatCurrency(formData.discount, formData.currency)}</span></div>}
-                                <div className="flex justify-between border-t border-slate-300 pt-2">
-                                    <span className="font-bold text-slate-800">Total</span>
-                                    <span className="font-bold text-xl text-slate-800">{formatCurrency(totalAmount, formData.currency)}</span>
-                                </div>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Notes</label>
-                                <textarea value={formData.notes} onChange={e => setFormData({ ...formData, notes: e.target.value })} rows={2}
-                                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" placeholder="Additional notes or payment instructions…" />
-                            </div>
-
-                            <div className="flex justify-end gap-3 pt-2 border-t border-slate-200">
-                                <button type="button" onClick={() => setShowForm(false)} className="px-5 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium">Cancel</button>
-                                <button type="submit" className="px-5 py-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium shadow-sm">Create Invoice</button>
                             </div>
                         </form>
-                    </div>
-                </div>
-            )}
 
-            {/* ─── Invoice Detail Modal ───────────────────── */}
-            {showDetail && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowDetail(null)}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg mx-4 max-h-[90vh] overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-slate-800 to-slate-900 p-6 text-white flex-shrink-0">
-                            <div className="flex items-center justify-between">
+                        <div className="p-8 border-t border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                            <div className="flex items-center gap-6">
                                 <div>
-                                    <h3 className="text-lg font-bold">{showDetail.invoiceNumber}</h3>
-                                    <p className="text-slate-300 text-sm mt-1">{showDetail.buyerName}</p>
-                                </div>
-                                <button onClick={() => setShowDetail(null)} className="text-white/70 hover:text-white"><X className="w-6 h-6" /></button>
-                            </div>
-                        </div>
-                        <div className="p-6 space-y-4 overflow-y-auto flex-1">
-                            <div className="flex justify-between items-center">
-                                <span className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-semibold border ${STATUS_CONFIG[showDetail.status].color}`}>
-                                    {STATUS_CONFIG[showDetail.status].label}
-                                </span>
-                                <span className="text-sm text-slate-500">{formatDate(showDetail.invoiceDate)}</span>
-                            </div>
-
-                            {showDetail.buyerEmail && <p className="text-sm text-slate-600">{showDetail.buyerEmail}</p>}
-                            {showDetail.buyerAddress && <p className="text-sm text-slate-500">{showDetail.buyerAddress}</p>}
-
-                            <div className="border-t pt-3 space-y-2">
-                                <h4 className="text-xs font-semibold text-slate-500 uppercase">Items</h4>
-                                {showDetail.items.map((item, i) => (
-                                    <div key={i} className="flex justify-between text-sm">
-                                        <span className="text-slate-700">{item.description} <span className="text-slate-400">×{item.quantity}</span></span>
-                                        <span className="font-medium">{formatCurrency(item.amount, showDetail.currency)}</span>
-                                    </div>
-                                ))}
-                            </div>
-
-                            <div className="bg-slate-50 p-4 rounded-lg space-y-2 text-sm">
-                                <div className="flex justify-between"><span>Subtotal</span><span>{formatCurrency(showDetail.subtotal, showDetail.currency)}</span></div>
-                                {showDetail.taxAmount > 0 && <div className="flex justify-between"><span>Tax ({showDetail.taxRate}%)</span><span>{formatCurrency(showDetail.taxAmount, showDetail.currency)}</span></div>}
-                                {showDetail.discount > 0 && <div className="flex justify-between"><span>Discount</span><span className="text-red-600">-{formatCurrency(showDetail.discount, showDetail.currency)}</span></div>}
-                                <div className="flex justify-between border-t pt-2 font-bold"><span>Total</span><span>{formatCurrency(showDetail.totalAmount, showDetail.currency)}</span></div>
-                                <div className="flex justify-between text-green-700"><span>Paid</span><span>{formatCurrency(showDetail.amountPaid, showDetail.currency)}</span></div>
-                                {showDetail.balanceDue > 0 && (
-                                    <div className="flex justify-between text-red-600 font-bold"><span>Balance Due</span><span>{formatCurrency(showDetail.balanceDue, showDetail.currency)}</span></div>
-                                )}
-                            </div>
-
-                            <div className="flex justify-between text-sm text-slate-500">
-                                <span>Due: {formatDate(showDetail.dueDate)}</span>
-                                {showDetail.paymentTerms && <span>{showDetail.paymentTerms}</span>}
-                            </div>
-                            {(showDetail.salesContractNumber || showDetail.purchaseContractNumber) && (
-                                <div className="bg-indigo-50 p-3 rounded-lg flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Package className="w-4 h-4 text-indigo-600" />
-                                        <span className="text-sm font-medium text-indigo-900">
-                                            Linked to {showDetail.type === 'SALES' ? 'Sales' : 'Purchase'} Contract
-                                        </span>
-                                    </div>
-                                    <span className="text-xs font-bold bg-white px-2 py-1 rounded border border-indigo-200 text-indigo-600">
-                                        {showDetail.salesContractNumber || showDetail.purchaseContractNumber}
-                                    </span>
-                                </div>
-                            )}
-                            {showDetail.notes && <p className="text-sm text-slate-500 bg-slate-50 p-3 rounded-lg">{showDetail.notes}</p>}
-
-                            <div className="flex gap-2 pt-3 border-t">
-                                {showDetail.status === 'DRAFT' && (
-                                    <button onClick={() => { handleStatusUpdate(showDetail, 'SENT'); setShowDetail(null); }} className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium text-sm flex items-center justify-center gap-2">
-                                        <Send className="w-4 h-4" /> Mark as Sent
-                                    </button>
-                                )}
-                                {(showDetail.status === 'SENT' || showDetail.status === 'OVERDUE') && (
-                                    <button onClick={() => { setShowPayment(showDetail); setShowDetail(null); setPaymentAmount(''); }} className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium text-sm flex items-center justify-center gap-2">
-                                        <CreditCard className="w-4 h-4" /> Record Payment
-                                    </button>
-                                )}
-                                <button onClick={() => setShowDetail(null)} className="px-4 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium text-sm">Close</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            )}
-
-            {/* ─── Payment Modal ──────────────────────────── */}
-            {showPayment && (
-                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={() => setShowPayment(null)}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden" onClick={e => e.stopPropagation()}>
-                        <div className="bg-gradient-to-r from-green-600 to-emerald-700 p-5 text-white">
-                            <div className="flex items-center gap-3">
-                                <CreditCard className="w-6 h-6" />
-                                <div>
-                                    <h3 className="text-lg font-bold">Record Payment</h3>
-                                    <p className="text-green-100 text-sm">{showPayment.invoiceNumber}</p>
+                                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Clearing Value</div>
+                                    <div className="text-3xl font-black text-slate-900">{formData.currency} {(items.reduce((s, i) => s + i.amount, 0) + (items.reduce((s, i) => s + i.amount, 0) * (formData.taxRate / 100)) - formData.discount).toLocaleString()}</div>
                                 </div>
                             </div>
-                        </div>
-                        <div className="p-6 space-y-4">
-                            <div className="bg-slate-50 p-3 rounded-lg text-sm space-y-1">
-                                <div className="flex justify-between"><span>Total Amount</span><span className="font-bold">{formatCurrency(showPayment.totalAmount, showPayment.currency)}</span></div>
-                                <div className="flex justify-between"><span>Already Paid</span><span className="text-green-700">{formatCurrency(showPayment.amountPaid, showPayment.currency)}</span></div>
-                                <div className="flex justify-between font-bold text-red-600"><span>Balance Due</span><span>{formatCurrency(showPayment.balanceDue, showPayment.currency)}</span></div>
-                            </div>
-                            <div>
-                                <label className="block text-sm font-medium text-slate-700 mb-1">Payment Amount ({showPayment.currency})</label>
-                                <input type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)}
-                                    min={0} max={showPayment.balanceDue} step="0.01" autoFocus required
-                                    className="w-full px-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-lg font-bold" />
-                            </div>
-                            <div className="flex justify-end gap-3">
-                                <button onClick={() => setShowPayment(null)} className="px-4 py-2.5 border border-slate-300 text-slate-700 rounded-lg hover:bg-slate-50 font-medium">Cancel</button>
-                                <button onClick={handleRecordPayment} className="px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 font-medium shadow-sm">Record Payment</button>
+                            <div className="flex items-center gap-4">
+                                <button type="button" onClick={() => setShowForm(false)} className="px-8 py-3 text-slate-400 font-bold uppercase text-xs tracking-widest hover:text-slate-600 transition-colors">Abort</button>
+                                <button onClick={handleCreate} className="px-10 py-4 bg-indigo-600 text-white rounded-2xl font-black tracking-widest uppercase text-xs shadow-xl shadow-indigo-100 hover:bg-indigo-700 hover:scale-[1.02] active:scale-[0.98] transition-all">Authorize Instrument</button>
                             </div>
                         </div>
                     </div>

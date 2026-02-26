@@ -3,7 +3,11 @@
 // =====================================================
 import { dbList, dbGet, dbCreate, dbUpdate, Query } from './supabaseDb';
 import { COLLECTIONS } from './supabaseDb';
-import { Buyer, BuyerType, SalesContract, ContractStatus, Shipment, ShipmentStatus, ApiResponse, Address } from '../types_commodity';
+import {
+    Buyer, BuyerType, SalesContract, ContractStatus,
+    Shipment, ShipmentStatus, ApiResponse, Address,
+    SalesContractItem
+} from '../types_commodity';
 
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';
 
@@ -67,9 +71,9 @@ export class SalesService {
     }
 
     async getSalesContracts(
-        params: { companyId?: string; page?: number; limit?: number } = {}
+        params: { companyId?: string; page?: number; limit?: number; includeItems?: boolean } = {}
     ): Promise<ApiResponse<{ data: SalesContract[]; total: number }>> {
-        const { companyId = DEFAULT_COMPANY_ID, page = 1, limit = 100 } = params;
+        const { companyId = DEFAULT_COMPANY_ID, page = 1, limit = 100, includeItems = true } = params;
         const offset = (page - 1) * limit;
         try {
             const { data, total, error } = await dbList(COLLECTIONS.SALES_CONTRACTS, [
@@ -79,6 +83,7 @@ export class SalesService {
                 Query.offset(offset)
             ]);
             if (error) return { success: false, error };
+
             const contracts: SalesContract[] = (data || []).map((item: any) => ({
                 id: item.$id, companyId: item.company_id, contractNumber: item.contract_number,
                 buyerId: item.buyer_id, commodityTypeId: item.commodity_type_id,
@@ -87,13 +92,35 @@ export class SalesService {
                 shipmentPeriodEnd: item.shipment_period_end,
                 contractedQuantity: Number(item.contracted_quantity),
                 shippedQuantity: Number(item.shipped_quantity || 0),
-                pricePerTon: Number(item.price_per_ton),
-                totalValue: Number(item.total_value), currency: item.currency,
+                pricePerTon: item.price_per_ton ? Number(item.price_per_ton) : undefined,
+                totalValue: item.total_value ? Number(item.total_value) : undefined,
+                totalAmount: item.total_amount ? Number(item.total_amount) : undefined,
+                currency: item.currency,
                 incoterms: item.incoterms, destinationPort: item.destination_port,
                 qualitySpecifications: item.quality_specifications ? JSON.parse(item.quality_specifications) : undefined,
                 status: item.status as ContractStatus,
                 createdBy: item.created_by || '', createdAt: item.$createdAt
             }));
+
+            if (includeItems && contracts.length > 0) {
+                const { data: itemsData } = await dbList(COLLECTIONS.SALES_CONTRACT_ITEMS, [
+                    Query.equal('contract_id', contracts.map(c => c.id))
+                ]);
+                if (itemsData) {
+                    contracts.forEach(c => {
+                        c.items = itemsData.filter((i: any) => i.contract_id === c.id).map((i: any) => ({
+                            id: i.$id, contractId: i.contract_id, commodityTypeId: i.commodity_type_id,
+                            grade: i.grade, quantity: Number(i.quantity),
+                            shippedQuantity: Number(i.shipped_quantity || 0),
+                            unitPrice: Number(i.unit_price), currency: i.currency,
+                            pricingLogic: i.pricing_logic ? JSON.parse(i.pricing_logic) : undefined,
+                            specifications: i.specifications ? JSON.parse(i.specifications) : undefined,
+                            createdAt: i.$createdAt, updatedAt: i.$updatedAt
+                        }));
+                    });
+                }
+            }
+
             return { success: true, data: { data: contracts, total: total || 0 } };
         } catch (error) { return { success: false, error: 'Failed to fetch sales contracts' }; }
     }
@@ -103,7 +130,13 @@ export class SalesService {
         companyId: string = DEFAULT_COMPANY_ID
     ): Promise<ApiResponse<SalesContract>> {
         try {
-            const totalValue = Number(contractData.contractedQuantity) * Number(contractData.pricePerTon);
+            let totalAmount = 0;
+            if (contractData.items && contractData.items.length > 0) {
+                totalAmount = contractData.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+            } else if (contractData.contractedQuantity && contractData.pricePerTon) {
+                totalAmount = Number(contractData.contractedQuantity) * Number(contractData.pricePerTon);
+            }
+
             const { data, error } = await dbCreate(COLLECTIONS.SALES_CONTRACTS, {
                 company_id: companyId, contract_number: contractData.contractNumber,
                 buyer_id: contractData.buyerId, commodity_type_id: contractData.commodityTypeId,
@@ -111,15 +144,57 @@ export class SalesService {
                 shipment_period_start: contractData.shipmentPeriodStart || '',
                 shipment_period_end: contractData.shipmentPeriodEnd || '',
                 contracted_quantity: contractData.contractedQuantity, shipped_quantity: 0,
-                price_per_ton: contractData.pricePerTon, total_value: totalValue,
+                price_per_ton: contractData.pricePerTon || 0, total_value: totalAmount,
+                total_amount: totalAmount,
                 currency: contractData.currency, incoterms: contractData.incoterms || '',
                 destination_port: contractData.destinationPort || '',
                 quality_specifications: contractData.qualitySpecifications ? JSON.stringify(contractData.qualitySpecifications) : '',
                 status: 'DRAFT', created_by: contractData.createdBy || ''
             });
             if (error || !data) return { success: false, error: error || 'Failed' };
-            return { success: true, data: { ...contractData, id: data.$id, status: 'DRAFT' as ContractStatus, shippedQuantity: 0, totalValue, createdAt: data.$createdAt } };
-        } catch (error) { return { success: false, error: 'Failed to create sales contract' }; }
+
+            const contractId = data.$id;
+            const createdItems: SalesContractItem[] = [];
+            if (contractData.items && contractData.items.length > 0) {
+                for (const item of contractData.items) {
+                    const { data: itemData } = await dbCreate(COLLECTIONS.SALES_CONTRACT_ITEMS, {
+                        contract_id: contractId,
+                        commodity_type_id: item.commodityTypeId,
+                        grade: item.grade || '',
+                        quantity: item.quantity,
+                        shipped_quantity: 0,
+                        unit_price: item.unitPrice,
+                        currency: item.currency || contractData.currency,
+                        pricing_logic: item.pricingLogic ? JSON.stringify(item.pricingLogic) : null,
+                        specifications: item.specifications ? JSON.stringify(item.specifications) : null
+                    });
+                    if (itemData) {
+                        createdItems.push({
+                            ...item,
+                            id: itemData.$id,
+                            contractId,
+                            shippedQuantity: 0,
+                            createdAt: itemData.$createdAt,
+                            updatedAt: itemData.$updatedAt
+                        });
+                    }
+                }
+            }
+
+            return {
+                success: true,
+                data: {
+                    ...contractData,
+                    id: contractId,
+                    status: 'DRAFT' as ContractStatus,
+                    shippedQuantity: 0,
+                    totalValue: totalAmount,
+                    totalAmount,
+                    items: createdItems,
+                    createdAt: data.$createdAt
+                }
+            };
+        } catch (error) { return { success: false, error: 'Failed' }; }
     }
 
     async updateContractStatus(id: string, status: ContractStatus): Promise<ApiResponse<void>> {
@@ -127,7 +202,7 @@ export class SalesService {
             const { error } = await dbUpdate(COLLECTIONS.SALES_CONTRACTS, id, { status });
             if (error) return { success: false, error };
             return { success: true };
-        } catch (error) { return { success: false, error: 'Failed to update contract status' }; }
+        } catch (error) { return { success: false, error: 'Failed to update status' }; }
     }
 
     async getShipments(
@@ -158,7 +233,7 @@ export class SalesService {
                 createdBy: item.created_by || '', createdAt: item.$createdAt
             }));
             return { success: true, data: { data: shipments, total: total || 0 } };
-        } catch (error) { return { success: false, error: 'Failed to fetch shipments' }; }
+        } catch (error) { return { success: false, error: 'Failed' }; }
     }
 
     async createShipment(
@@ -166,6 +241,12 @@ export class SalesService {
         companyId: string = DEFAULT_COMPANY_ID
     ): Promise<ApiResponse<Shipment>> {
         try {
+            // Validate Contract is ACTIVE
+            const { data: contract } = await dbGet(COLLECTIONS.SALES_CONTRACTS, shipmentData.salesContractId);
+            if (!contract || contract.status !== 'ACTIVE') {
+                return { success: false, error: 'Cannot create shipment for a contract that is not ACTIVE' };
+            }
+
             const { data, error } = await dbCreate(COLLECTIONS.SHIPMENTS, {
                 company_id: companyId, shipment_number: shipmentData.shipmentNumber,
                 sales_contract_id: shipmentData.salesContractId, buyer_id: shipmentData.buyerId,
@@ -185,6 +266,6 @@ export class SalesService {
             });
             if (error || !data) return { success: false, error: error || 'Failed' };
             return { success: true, data: { ...shipmentData, id: data.$id, status: 'PLANNED' as ShipmentStatus, createdAt: data.$createdAt } };
-        } catch (error) { return { success: false, error: 'Failed to create shipment' }; }
+        } catch (error) { return { success: false, error: 'Failed' }; }
     }
 }
