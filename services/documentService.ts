@@ -215,8 +215,8 @@ export class DocumentService {
 
         // Define some standard x-positions for right alignment
         // The values are right-aligned at pageWidth - 15.
-        // Let's place the right-aligned labels near the values, around pageWidth - 55.
-        const rightLabelX = pageWidth - 55;
+        // Let's place the right-aligned labels much nearer to the values, around pageWidth - 45.
+        const rightLabelX = pageWidth - 45;
         const rightValueX = pageWidth - 15;
 
         doc.setFont('helvetica', 'bold');
@@ -307,8 +307,9 @@ export class DocumentService {
         // Force the text color to a strict dark slate (51, 65, 85) for the subtotal block, overriding the jspdf-autotable defaults.
         doc.setTextColor(51, 65, 85);
         doc.setFont('helvetica', 'normal');
-        doc.text('Subtotal:', summaryBoxX + 10, finalY + 12);
-        doc.text('Tax (0%):', summaryBoxX + 10, finalY + 20);
+        // Increase padding from 10 to 15 to give space between the box left border and the text
+        doc.text('Subtotal:', summaryBoxX + 15, finalY + 12);
+        doc.text('Tax (0%):', summaryBoxX + 15, finalY + 20);
 
         doc.setFont('helvetica', 'bold');
         doc.text(`${contract.currency} ${contract.totalValue?.toLocaleString() || 0}`, rightValueX - 5, finalY + 12, { align: 'right' });
@@ -316,7 +317,7 @@ export class DocumentService {
 
         // Divider line
         doc.setDrawColor(203, 213, 225); // Slate-300
-        doc.line(summaryBoxX + 10, finalY + 26, rightValueX - 5, finalY + 26);
+        doc.line(summaryBoxX + 15, finalY + 26, rightValueX - 5, finalY + 26);
 
         // Total
         doc.setFontSize(12);
