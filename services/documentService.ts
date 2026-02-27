@@ -6,6 +6,7 @@ import { COLLECTIONS } from './supabaseDb';
 import { ApiResponse, SalesContract, Buyer, Shipment, DocumentType } from '../types_commodity';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { LOGO_BASE64 } from '../utils/logoBase64';
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';
 
 export interface DocumentRecord {
@@ -159,14 +160,18 @@ export class DocumentService {
         doc.setFillColor(79, 70, 229); // Indigo-600 #4f46e5
         doc.rect(0, 0, pageWidth, 40, 'F');
 
+        // Add Logo Image
+        // doc.addImage(imageData, format, x, y, width, height)
+        doc.addImage(LOGO_BASE64, 'PNG', 10, 5, 40, 30);
+
         doc.setTextColor(255, 255, 255);
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(24);
-        doc.text('GALALTIX COMMODITIES', 15, 25);
+        doc.text('GALALTIX COMMODITIES', 55, 24);
 
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(10);
-        doc.text('123 Trade Center, Lagos, Nigeria | contact@galaltix.com', 15, 32);
+        doc.text('123 Trade Center, Lagos, Nigeria | contact@galaltix.com', 55, 31);
 
         // "INVOICE" Badge aligned to the right
         doc.setFontSize(36);
@@ -199,7 +204,7 @@ export class DocumentService {
         doc.setFontSize(10);
 
         // Define some standard x-positions for right alignment
-        const rightLabelX = pageWidth - 60;
+        const rightLabelX = pageWidth - 70;
         const rightValueX = pageWidth - 15;
 
         doc.setFont('helvetica', 'bold');
