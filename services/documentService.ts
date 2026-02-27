@@ -153,17 +153,182 @@ export class DocumentService {
 
     // ──── PDF Generation ────
     generateInvoicePDF(contract: SalesContract, buyer: Buyer): jsPDF {
-        const doc = new jsPDF();
-        doc.setFontSize(20);
-        doc.text('INVOICE', 105, 20, { align: 'center' });
+        const doc = new jsPDF('p', 'mm', 'a4');
+        const pageWidth = doc.internal.pageSize.width;
+
+        // --- 1. Header (Brand Color Band) ---
+        doc.setFillColor(79, 70, 229); // Indigo-600 #4f46e5
+        doc.rect(0, 0, pageWidth, 40, 'F');
+
+        doc.setTextColor(255, 255, 255);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(24);
+        doc.text('GALALTIX COMMODITIES', 15, 25);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text('123 Trade Center, Lagos, Nigeria | contact@galaltix.com', 15, 32);
+
+        // "INVOICE" Badge aligned to the right
+        doc.setFontSize(36);
+        doc.setFont('helvetica', 'bold');
+        doc.text('INVOICE', pageWidth - 15, 28, { align: 'right' });
+
+        // --- 2. Meta Information Section ---
+        doc.setTextColor(51, 65, 85); // Slate-700
+
+        // Left column (Billed To)
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('BILLED TO:', 15, 55);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        doc.text(buyer.name, 15, 62);
+
+        doc.setFontSize(10);
+        doc.setTextColor(100, 116, 139); // Slate-500
+        if (buyer.address) {
+            const addr = [buyer.address.street, buyer.address.city, buyer.address.state, buyer.address.country].filter(Boolean).join(', ');
+            if (addr) doc.text(addr, 15, 68);
+        }
+        if (buyer.email) doc.text(buyer.email, 15, 74);
+        if (buyer.phone) doc.text(buyer.phone, 15, 80);
+
+        // Right column (Invoice Details)
+        doc.setTextColor(51, 65, 85);
+        doc.setFontSize(10);
+
+        // Define some standard x-positions for right alignment
+        const rightLabelX = pageWidth - 60;
+        const rightValueX = pageWidth - 15;
+
+        doc.setFont('helvetica', 'bold');
+        doc.text('Invoice Number:', rightLabelX, 55);
+        doc.text('Contract ID:', rightLabelX, 62);
+        doc.text('Date Issued:', rightLabelX, 69);
+        doc.text('Status:', rightLabelX, 76);
+
+        doc.setFont('helvetica', 'normal');
+        doc.text(`INV-${contract.contractNumber}`, rightValueX, 55, { align: 'right' });
+        doc.text(contract.contractNumber, rightValueX, 62, { align: 'right' });
+        doc.text(new Date(contract.contractDate).toLocaleDateString(), rightValueX, 69, { align: 'right' });
+
+        // Status Badge (Visual)
+        const statusY = 76;
+        doc.text(contract.status, rightValueX, statusY, { align: 'right' });
+
+        // --- 3. Items Table ---
+        const tableStartY = 95;
+
+        let tableData = [];
+        if (contract.items && contract.items.length > 0) {
+            tableData = contract.items.map(item => [
+                'Commodity (See Contract)',
+                item.grade || 'Standard',
+                `${item.quantity} MT`,
+                `${item.currency} ${item.unitPrice.toLocaleString()}`,
+                `${item.currency} ${(item.quantity * item.unitPrice).toLocaleString()}`
+            ]);
+        } else {
+            tableData = [
+                [
+                    'Commodity Export',
+                    'Standard',
+                    `${contract.contractedQuantity} MT`,
+                    `${contract.currency} ${contract.pricePerTon?.toLocaleString() || 0}`,
+                    `${contract.currency} ${contract.totalValue?.toLocaleString() || 0}`
+                ]
+            ];
+        }
+
+        // @ts-ignore - jspdf-autotable injects autoTable
+        doc.autoTable({
+            startY: tableStartY,
+            head: [['Description', 'Grade', 'Quantity', 'Unit Price', 'Total']],
+            body: tableData,
+            theme: 'grid',
+            headStyles: {
+                fillColor: [79, 70, 229], // Indigo-600
+                textColor: 255,
+                fontStyle: 'bold',
+                halign: 'center'
+            },
+            columnStyles: {
+                0: { halign: 'left' },
+                1: { halign: 'center' },
+                2: { halign: 'right' },
+                3: { halign: 'right' },
+                4: { halign: 'right', fontStyle: 'bold' }
+            },
+            alternateRowStyles: {
+                fillColor: [248, 250, 252] // Slate-50
+            },
+            styles: {
+                font: 'helvetica',
+                fontSize: 10,
+                textColor: [51, 65, 85],
+                cellPadding: 6,
+                lineColor: [226, 232, 240], // Slate-200
+                lineWidth: 0.1
+            }
+        });
+
+        // --- 4. Totals Summary ---
+        // @ts-ignore
+        const finalY = doc.lastAutoTable.finalY + 15;
+
+        // Summary box on the right
+        const summaryBoxWidth = 80;
+        const summaryBoxX = pageWidth - 15 - summaryBoxWidth;
+
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(summaryBoxX, finalY, summaryBoxWidth, 40, 3, 3, 'F');
+        doc.setDrawColor(226, 232, 240);
+        doc.roundedRect(summaryBoxX, finalY, summaryBoxWidth, 40, 3, 3, 'S');
+
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Subtotal:', summaryBoxX + 10, finalY + 12);
+        doc.text('Tax (0%):', summaryBoxX + 10, finalY + 20);
+
+        doc.setFont('helvetica', 'bold');
+        doc.text(`${contract.currency} ${contract.totalValue?.toLocaleString() || 0}`, rightValueX - 5, finalY + 12, { align: 'right' });
+        doc.text(`${contract.currency} 0.00`, rightValueX - 5, finalY + 20, { align: 'right' });
+
+        // Divider line
+        doc.setDrawColor(203, 213, 225); // Slate-300
+        doc.line(summaryBoxX + 10, finalY + 26, rightValueX - 5, finalY + 26);
+
+        // Total
         doc.setFontSize(12);
-        doc.text(`Contract: ${contract.contractNumber}`, 20, 40);
-        doc.text(`Buyer: ${buyer.name}`, 20, 50);
-        doc.text(`Commodity Qty: ${contract.contractedQuantity} MT`, 20, 60);
-        doc.text(`Price: ${contract.currency} ${contract.pricePerTon}/MT`, 20, 70);
-        doc.text(`Total Value: ${contract.currency} ${contract.totalValue.toLocaleString()}`, 20, 80);
-        doc.text(`Date: ${contract.contractDate}`, 20, 90);
-        doc.text(`Status: ${contract.status}`, 20, 100);
+        doc.setTextColor(15, 23, 42); // Slate-900
+        doc.text('Total Due:', summaryBoxX + 10, finalY + 34);
+        doc.text(`${contract.currency} ${contract.totalValue?.toLocaleString() || 0}`, rightValueX - 5, finalY + 34, { align: 'right' });
+
+        // --- 5. Footer and Payment Info ---
+        doc.setFontSize(10);
+        doc.setTextColor(100, 116, 139);
+        doc.setFont('helvetica', 'bold');
+        doc.text('Payment Info & Terms', 15, finalY + 5);
+
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text('Please make payment by the due date specified. Includes all applicable', 15, finalY + 12);
+        doc.text('export processing fees based on FOB terms unless otherwise specified.', 15, finalY + 17);
+        if (buyer.paymentTerms) {
+            doc.text(`Terms: ${buyer.paymentTerms}`, 15, finalY + 24);
+        }
+
+        // Page border bottom signature area
+        const pageHeight = doc.internal.pageSize.height;
+        doc.setDrawColor(226, 232, 240);
+        doc.line(15, pageHeight - 30, pageWidth - 15, pageHeight - 30);
+
+        doc.setFont('helvetica', 'italic');
+        doc.setFontSize(8);
+        doc.text('Generated electronically by Galaltix Commodities ERP Software. Valid without physical signature.', 15, pageHeight - 20);
+
         return doc;
     }
 
