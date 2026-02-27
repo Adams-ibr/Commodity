@@ -214,14 +214,14 @@ export class DocumentService {
         doc.setFontSize(10);
 
         // Define some standard x-positions for right alignment
-        const rightLabelX = pageWidth - 60;
+        const rightLabelX = pageWidth - 65;
         const rightValueX = pageWidth - 15;
 
         doc.setFont('helvetica', 'bold');
-        doc.text('Invoice Number:', rightLabelX, metaY);
-        doc.text('Contract ID:', rightLabelX, metaY + 7);
-        doc.text('Date Issued:', rightLabelX, metaY + 14);
-        doc.text('Status:', rightLabelX, metaY + 21);
+        doc.text('Invoice Number:', rightLabelX, metaY, { align: 'right' });
+        doc.text('Contract ID:', rightLabelX, metaY + 7, { align: 'right' });
+        doc.text('Date Issued:', rightLabelX, metaY + 14, { align: 'right' });
+        doc.text('Status:', rightLabelX, metaY + 21, { align: 'right' });
 
         doc.setFont('helvetica', 'normal');
         doc.text(`INV-${contract.contractNumber}`, rightValueX, metaY, { align: 'right' });
@@ -302,6 +302,7 @@ export class DocumentService {
         doc.roundedRect(summaryBoxX, finalY, summaryBoxWidth, 40, 3, 3, 'S');
 
         doc.setFontSize(10);
+        doc.setTextColor(51, 65, 85); // Slate-700
         doc.setFont('helvetica', 'normal');
         doc.text('Subtotal:', summaryBoxX + 10, finalY + 12);
         doc.text('Tax (0%):', summaryBoxX + 10, finalY + 20);
@@ -317,6 +318,7 @@ export class DocumentService {
         // Total
         doc.setFontSize(12);
         doc.setTextColor(15, 23, 42); // Slate-900
+        doc.setFont('helvetica', 'bold');
         doc.text('Total Due:', summaryBoxX + 10, finalY + 34);
         doc.text(`${contract.currency} ${contract.totalValue?.toLocaleString() || 0}`, rightValueX - 5, finalY + 34, { align: 'right' });
 
