@@ -68,7 +68,7 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
                 api.commodityMaster.getCommodityTypes()
             ]);
             if (sc.success) setSalesContracts(sc.data?.data || []);
-            if (pc.success) setPurchaseContracts(pc.data || []);
+            if (pc.success) setPurchaseContracts(pc.data?.data || []);
             if (b.success) setBuyers(b.data || []);
             if (s.success) setSuppliers(s.data || []);
             if (ct.success) setCommodityTypes(ct.data || []);
@@ -84,8 +84,8 @@ export const InvoiceManager: React.FC<InvoiceManagerProps> = ({ userRole, onAudi
                 type: typeFilter !== 'all' ? typeFilter : undefined
             });
             if (res.success && res.data) {
-                setInvoices(res.data.data);
-                setTotalRecords(res.data.total);
+                setInvoices(res.data.data || []);
+                setTotalRecords(res.data.total || 0);
             }
         } catch (e) { console.error(e); }
         setIsLoading(false);

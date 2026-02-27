@@ -43,8 +43,8 @@ export const WarehouseManager: React.FC<WarehouseManagerProps> = ({
             ]);
 
             if (batchesRes.success && batchesRes.data) {
-                setBatches(batchesRes.data.data);
-                setTotalRecords(batchesRes.data.total);
+                setBatches(batchesRes.data.data || []);
+                setTotalRecords(batchesRes.data.total || 0);
             }
             setLocations(locationsData || []);
         } catch (error) {

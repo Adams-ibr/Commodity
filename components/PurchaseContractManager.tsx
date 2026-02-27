@@ -42,7 +42,7 @@ export const PurchaseContractManager: React.FC<PurchaseContractManagerProps> = (
             ]);
 
             if (contractsRes.success && contractsRes.data) {
-                setContracts(contractsRes.data.data);
+                setContracts(contractsRes.data.data || []);
             }
             if (suppliersRes.success && suppliersRes.data) setSuppliers(suppliersRes.data);
             if (commoditiesRes.success && commoditiesRes.data) setCommodityTypes(commoditiesRes.data);

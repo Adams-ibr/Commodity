@@ -38,10 +38,10 @@ export const ShipmentManager: React.FC<ShipmentManagerProps> = ({
             ]);
 
             if (shipmentsRes.success && shipmentsRes.data) {
-                setShipments(shipmentsRes.data.data);
-                setTotalRecords(shipmentsRes.data.total);
+                setShipments(shipmentsRes.data.data || []);
+                setTotalRecords(shipmentsRes.data.total || 0);
             }
-            if (contractsRes.success && contractsRes.data) setContracts(contractsRes.data.data);
+            if (contractsRes.success && contractsRes.data) setContracts(contractsRes.data.data || []);
             if (buyersRes.success && buyersRes.data) setBuyers(buyersRes.data);
         } catch (error) {
             console.error(error);

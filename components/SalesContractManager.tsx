@@ -38,8 +38,8 @@ export const SalesContractManager: React.FC<SalesContractManagerProps> = ({
             ]);
 
             if (contractsRes.success && contractsRes.data) {
-                setContracts(contractsRes.data.data);
-                setTotalRecords(contractsRes.data.total);
+                setContracts(contractsRes.data.data || []);
+                setTotalRecords(contractsRes.data.total || 0);
             }
             if (buyersRes.success && buyersRes.data) setBuyers(buyersRes.data);
             if (commTypesRes.success && commTypesRes.data) setCommodityTypes(commTypesRes.data);
