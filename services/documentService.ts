@@ -4,9 +4,8 @@
 import { dbList, dbGet, dbCreate, dbUpdate, dbDelete, Query } from './supabaseDb';
 import { COLLECTIONS } from './supabaseDb';
 import { ApiResponse, SalesContract, Buyer, Shipment, DocumentType } from '../types_commodity';
-import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
-
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';
 
 export interface DocumentRecord {
@@ -242,8 +241,7 @@ export class DocumentService {
             ];
         }
 
-        // @ts-ignore - jspdf-autotable injects autoTable
-        doc.autoTable({
+        autoTable(doc, {
             startY: tableStartY,
             head: [['Description', 'Grade', 'Quantity', 'Unit Price', 'Total']],
             body: tableData,
