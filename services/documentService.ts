@@ -156,74 +156,85 @@ export class DocumentService {
         const doc = new jsPDF('p', 'mm', 'a4');
         const pageWidth = doc.internal.pageSize.width;
 
-        // --- 1. Header (Brand Color Band) ---
-        doc.setFillColor(79, 70, 229); // Indigo-600 #4f46e5
-        doc.rect(0, 0, pageWidth, 40, 'F');
-
+        // --- 1. Header ---
         // Add Logo Image
-        // doc.addImage(imageData, format, x, y, width, height)
-        doc.addImage(LOGO_BASE64, 'PNG', 10, 5, 40, 30);
+        doc.addImage(LOGO_BASE64, 'PNG', 14, 12, 55, 25);
 
-        doc.setTextColor(255, 255, 255);
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(24);
-        doc.text('GALALTIX COMMODITIES', 55, 24);
-
+        // Company Info
+        doc.setTextColor(100, 116, 139); // Slate-500
         doc.setFont('helvetica', 'normal');
-        doc.setFontSize(10);
-        doc.text('123 Trade Center, Lagos, Nigeria | contact@galaltix.com', 55, 31);
+        doc.setFontSize(9);
+        doc.text('123 Trade Center, Lagos, Nigeria', 15, 43);
+        doc.text('contact@galaltix.com | +234 800 000 0000', 15, 48);
 
         // "INVOICE" Badge aligned to the right
-        doc.setFontSize(36);
+        doc.setTextColor(79, 70, 229); // Indigo-600
+        doc.setFontSize(28);
         doc.setFont('helvetica', 'bold');
-        doc.text('INVOICE', pageWidth - 15, 28, { align: 'right' });
+        doc.text('INVOICE', pageWidth - 15, 25, { align: 'right' });
+
+        // Header separator
+        doc.setDrawColor(226, 232, 240); // Slate-200
+        doc.setLineWidth(0.5);
+        doc.line(15, 55, pageWidth - 15, 55);
 
         // --- 2. Meta Information Section ---
+        const metaY = 65;
         doc.setTextColor(51, 65, 85); // Slate-700
 
         // Left column (Billed To)
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
-        doc.text('BILLED TO:', 15, 55);
+        doc.text('BILLED TO:', 15, metaY);
 
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(11);
-        doc.text(buyer.name, 15, 62);
+        doc.text(buyer.name, 15, metaY + 7);
 
         doc.setFontSize(10);
         doc.setTextColor(100, 116, 139); // Slate-500
+        let currentY = metaY + 13;
         if (buyer.address) {
             const addr = [buyer.address.street, buyer.address.city, buyer.address.state, buyer.address.country].filter(Boolean).join(', ');
-            if (addr) doc.text(addr, 15, 68);
+            if (addr) {
+                doc.text(addr, 15, currentY);
+                currentY += 6;
+            }
         }
-        if (buyer.email) doc.text(buyer.email, 15, 74);
-        if (buyer.phone) doc.text(buyer.phone, 15, 80);
+        if (buyer.email) {
+            doc.text(buyer.email, 15, currentY);
+            currentY += 6;
+        }
+        if (buyer.phone) {
+            doc.text(buyer.phone, 15, currentY);
+        }
 
         // Right column (Invoice Details)
         doc.setTextColor(51, 65, 85);
         doc.setFontSize(10);
 
         // Define some standard x-positions for right alignment
-        const rightLabelX = pageWidth - 70;
+        const rightLabelX = pageWidth - 60;
         const rightValueX = pageWidth - 15;
 
         doc.setFont('helvetica', 'bold');
-        doc.text('Invoice Number:', rightLabelX, 55);
-        doc.text('Contract ID:', rightLabelX, 62);
-        doc.text('Date Issued:', rightLabelX, 69);
-        doc.text('Status:', rightLabelX, 76);
+        doc.text('Invoice Number:', rightLabelX, metaY);
+        doc.text('Contract ID:', rightLabelX, metaY + 7);
+        doc.text('Date Issued:', rightLabelX, metaY + 14);
+        doc.text('Status:', rightLabelX, metaY + 21);
 
         doc.setFont('helvetica', 'normal');
-        doc.text(`INV-${contract.contractNumber}`, rightValueX, 55, { align: 'right' });
-        doc.text(contract.contractNumber, rightValueX, 62, { align: 'right' });
-        doc.text(new Date(contract.contractDate).toLocaleDateString(), rightValueX, 69, { align: 'right' });
+        doc.text(`INV-${contract.contractNumber}`, rightValueX, metaY, { align: 'right' });
+        doc.text(contract.contractNumber, rightValueX, metaY + 7, { align: 'right' });
+        doc.text(new Date(contract.contractDate).toLocaleDateString(), rightValueX, metaY + 14, { align: 'right' });
 
         // Status Badge (Visual)
-        const statusY = 76;
-        doc.text(contract.status, rightValueX, statusY, { align: 'right' });
+        doc.setTextColor(79, 70, 229);
+        doc.setFont('helvetica', 'bold');
+        doc.text(contract.status, rightValueX, metaY + 21, { align: 'right' });
 
         // --- 3. Items Table ---
-        const tableStartY = 95;
+        const tableStartY = 105;
 
         let tableData = [];
         if (contract.items && contract.items.length > 0) {
