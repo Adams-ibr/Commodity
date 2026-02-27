@@ -239,4 +239,12 @@ export class ProcurementService {
       };
     } catch (error) { return { success: false, error: 'Failed' }; }
   }
+
+  async updateContractStatus(id: string, status: ContractStatus): Promise<ApiResponse<PurchaseContract>> {
+    try {
+      const { data, error } = await dbUpdate(COLLECTIONS.PURCHASE_CONTRACTS, id, { status });
+      if (error || !data) return { success: false, error: error || 'Failed' };
+      return { success: true, data: data as any };
+    } catch (error) { return { success: false, error: 'Failed' }; }
+  }
 }
