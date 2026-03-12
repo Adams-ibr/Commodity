@@ -28,6 +28,7 @@ import { TradeFinanceService } from './tradeFinanceService';
 import { ComplianceService } from './complianceService';
 import { ReportingService } from './reportingService';
 import { InvoiceService } from './invoiceService';
+import { NotificationService } from './notificationService';
 import { authService } from './authService';
 
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';
@@ -47,6 +48,7 @@ export const api = {
     compliance: new ComplianceService(),
     reporting: new ReportingService(),
     invoices: new InvoiceService(),
+    notifications: new NotificationService(),
 
     audit: {
         async log(action: string, details: string, user: string, role: string, companyId: string = DEFAULT_COMPANY_ID) {

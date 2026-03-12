@@ -167,9 +167,19 @@ export class InvoiceService {
                 created_by: invoiceData.createdBy || '',
             });
             if (error || !data) return { success: false, error: error || 'Failed' };
+
+            const newInvoice = { ...invoiceData, id: data.$id, createdAt: data.$createdAt };
+
+            // Trigger WhatsApp Notification (Async, don't block response)
+            import('./api').then(({ api }) => {
+                api.notifications.notifyInvoiceCreated(newInvoice).catch(err =>
+                    console.warn('Failed to send WhatsApp notification:', err)
+                );
+            });
+
             return {
                 success: true,
-                data: { ...invoiceData, id: data.$id, createdAt: data.$createdAt }
+                data: newInvoice
             };
         } catch (error) { return { success: false, error: 'Failed to create invoice' }; }
     }

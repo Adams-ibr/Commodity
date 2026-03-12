@@ -181,18 +181,27 @@ export class SalesService {
                 }
             }
 
+            const newContract: SalesContract = {
+                ...contractData,
+                id: contractId,
+                status: 'DRAFT' as ContractStatus,
+                shippedQuantity: 0,
+                totalValue: totalAmount,
+                totalAmount,
+                items: createdItems,
+                createdAt: data.$createdAt
+            };
+
+            // Trigger WhatsApp Notification (Async)
+            import('./api').then(({ api }) => {
+                api.notifications.notifyOrderCreated(newContract, 'Sales').catch(err =>
+                    console.warn('Failed to send WhatsApp notification:', err)
+                );
+            });
+
             return {
                 success: true,
-                data: {
-                    ...contractData,
-                    id: contractId,
-                    status: 'DRAFT' as ContractStatus,
-                    shippedQuantity: 0,
-                    totalValue: totalAmount,
-                    totalAmount,
-                    items: createdItems,
-                    createdAt: data.$createdAt
-                }
+                data: newContract
             };
         } catch (error) { return { success: false, error: 'Failed' }; }
     }
