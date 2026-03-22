@@ -15,6 +15,7 @@ export const COLLECTIONS = {
     COMMODITY_TYPES: 'commodity_types',
     COMMODITY_BATCHES: 'commodity_batches',
     PURCHASE_CONTRACTS: 'purchase_contracts',
+    ADVANCE_PAYMENTS: 'advance_payments',
     SALES_CONTRACTS: 'sales_contracts',
     SHIPMENTS: 'shipments',
     SHIPMENT_BATCHES: 'shipment_batches',

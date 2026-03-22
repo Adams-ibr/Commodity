@@ -231,7 +231,9 @@ export class SalesService {
                 id: item.$id, companyId: item.company_id, shipmentNumber: item.shipment_number,
                 salesContractId: item.sales_contract_id, buyerId: item.buyer_id || '',
                 vesselName: item.vessel_name, containerNumbers: item.container_numbers ? JSON.parse(item.container_numbers) : [],
+                bookingRef: item.booking_ref,
                 loadingPort: item.loading_port, destinationPort: item.destination_port,
+                dischargePlace: item.discharge_place,
                 estimatedDeparture: item.estimated_departure, actualDeparture: item.actual_departure,
                 estimatedArrival: item.estimated_arrival, actualArrival: item.actual_arrival,
                 totalQuantity: Number(item.total_quantity || 0),
@@ -261,8 +263,10 @@ export class SalesService {
                 sales_contract_id: shipmentData.salesContractId, buyer_id: shipmentData.buyerId,
                 vessel_name: shipmentData.vesselName || '',
                 container_numbers: JSON.stringify(shipmentData.containerNumbers || []),
+                booking_ref: shipmentData.bookingRef || '',
                 loading_port: shipmentData.loadingPort || '',
                 destination_port: shipmentData.destinationPort || '',
+                discharge_place: shipmentData.dischargePlace || '',
                 estimated_departure: shipmentData.estimatedDeparture || '',
                 estimated_arrival: shipmentData.estimatedArrival || '',
                 total_quantity: shipmentData.totalQuantity || 0,
@@ -275,6 +279,22 @@ export class SalesService {
             });
             if (error || !data) return { success: false, error: error || 'Failed' };
             return { success: true, data: { ...shipmentData, id: data.$id, status: 'PLANNED' as ShipmentStatus, createdAt: data.$createdAt } };
+        } catch (error) { return { success: false, error: 'Failed' }; }
+    }
+
+    async updateShipmentStatus(id: string, status: ShipmentStatus, additionalData?: Partial<Shipment>): Promise<ApiResponse<Shipment>> {
+        try {
+            const payload: any = { status };
+            if (additionalData) {
+                if (additionalData.bookingRef !== undefined) payload.booking_ref = additionalData.bookingRef;
+                if (additionalData.vesselName !== undefined) payload.vessel_name = additionalData.vesselName;
+                if (additionalData.loadingPort !== undefined) payload.loading_port = additionalData.loadingPort;
+                if (additionalData.destinationPort !== undefined) payload.destination_port = additionalData.destinationPort;
+                if (additionalData.dischargePlace !== undefined) payload.discharge_place = additionalData.dischargePlace;
+            }
+            const { data, error } = await dbUpdate(COLLECTIONS.SHIPMENTS, id, payload);
+            if (error || !data) return { success: false, error: error || 'Failed to update' };
+            return { success: true, data: { ...additionalData, id: data.$id, status } as Shipment };
         } catch (error) { return { success: false, error: 'Failed' }; }
     }
 }

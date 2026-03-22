@@ -140,6 +140,7 @@ export class ProcurementService {
         pricePerTon: item.price_per_ton ? Number(item.price_per_ton) : undefined,
         totalValue: item.total_value ? Number(item.total_value) : undefined,
         totalAmount: item.total_amount ? Number(item.total_amount) : undefined,
+        totalAdvancePaid: item.total_advance_paid ? Number(item.total_advance_paid) : 0,
         currency: item.currency, paymentTerms: item.payment_terms,
         qualitySpecifications: item.quality_specifications ? JSON.parse(item.quality_specifications) : undefined,
         status: item.status as ContractStatus, createdBy: item.created_by || '', createdAt: item.$createdAt
@@ -159,6 +160,17 @@ export class ProcurementService {
               pricingLogic: i.pricing_logic ? JSON.parse(i.pricing_logic) : undefined,
               specifications: i.specifications ? JSON.parse(i.specifications) : undefined,
               createdAt: i.$createdAt, updatedAt: i.$updatedAt
+            }));
+          });
+        }
+
+        const { data: advanceData } = await dbList(COLLECTIONS.ADVANCE_PAYMENTS, [
+          Query.equal('contract_id', contracts.map(c => c.id))
+        ]);
+        if (advanceData) {
+          contracts.forEach(c => {
+            c.advancePayments = advanceData.filter((a: any) => a.contract_id === c.id).map((a: any) => ({
+              id: a.$id, contractId: a.contract_id, amount: Number(a.amount), paymentDate: a.payment_date, referenceNumber: a.reference_number, notes: a.notes, createdAt: a.$createdAt
             }));
           });
         }
@@ -254,6 +266,32 @@ export class ProcurementService {
       const { data, error } = await dbUpdate(COLLECTIONS.PURCHASE_CONTRACTS, id, { status });
       if (error || !data) return { success: false, error: error || 'Failed' };
       return { success: true, data: data as any };
+    } catch (error) { return { success: false, error: 'Failed' }; }
+  }
+
+  async recordAdvancePayment(
+    contractId: string,
+    paymentData: { amount: number; paymentDate: string; referenceNumber?: string; notes?: string; }
+  ): Promise<ApiResponse<any>> {
+    try {
+      const { data, error } = await dbCreate(COLLECTIONS.ADVANCE_PAYMENTS, {
+        contract_id: contractId,
+        amount: paymentData.amount,
+        payment_date: paymentData.paymentDate,
+        reference_number: paymentData.referenceNumber || '',
+        notes: paymentData.notes || ''
+      });
+      if (error || !data) return { success: false, error: error || 'Failed' };
+
+      const contractRes = await dbGet(COLLECTIONS.PURCHASE_CONTRACTS, contractId);
+      if (contractRes.data) {
+        const currentTotal = Number((contractRes.data as any).total_advance_paid || 0);
+        await dbUpdate(COLLECTIONS.PURCHASE_CONTRACTS, contractId, {
+          total_advance_paid: currentTotal + paymentData.amount
+        });
+      }
+
+      return { success: true, data };
     } catch (error) { return { success: false, error: 'Failed' }; }
   }
 }

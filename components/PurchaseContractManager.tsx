@@ -24,6 +24,9 @@ export const PurchaseContractManager: React.FC<PurchaseContractManagerProps> = (
     const [showReceiptForm, setShowReceiptForm] = useState(false);
     const [editingContract, setEditingContract] = useState<PurchaseContract | null>(null);
     const [receivingContract, setReceivingContract] = useState<PurchaseContract | null>(null);
+    const [advancingContract, setAdvancingContract] = useState<PurchaseContract | null>(null);
+    const [advanceAmount, setAdvanceAmount] = useState('');
+    const [advanceReference, setAdvanceReference] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
 
     const [searchTerm, setSearchTerm] = useState('');
@@ -87,6 +90,32 @@ export const PurchaseContractManager: React.FC<PurchaseContractManagerProps> = (
             }
         } catch (e) {
             console.error(e);
+        }
+    };
+
+    const handleRecordAdvance = async () => {
+        if (!advancingContract || !advanceAmount) return;
+        setIsSubmitting(true);
+        try {
+            const res = await (api.procurement as any).recordAdvancePayment(advancingContract.id, {
+                amount: Number(advanceAmount),
+                paymentDate: new Date().toISOString().split('T')[0],
+                referenceNumber: advanceReference,
+                notes: 'Recorded via portal'
+            });
+            if (res.success) {
+                if (onAuditLog) onAuditLog('ADVANCE_PAYMENT_SAVE', `Saved advance for ${advancingContract.contractNumber}`);
+                setAdvancingContract(null);
+                setAdvanceAmount('');
+                setAdvanceReference('');
+                loadData();
+            } else {
+                alert(res.error || 'Failed to save advance payment');
+            }
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsSubmitting(false);
         }
     };
 
@@ -214,6 +243,17 @@ export const PurchaseContractManager: React.FC<PurchaseContractManagerProps> = (
                                         <div className="text-lg font-black text-emerald-600">{contract.currency} {(contract.totalAmount || contract.totalValue || 0).toLocaleString()}</div>
                                     </div>
                                 </div>
+
+                                <div className="grid grid-cols-2 gap-4 border-t border-slate-100 pt-4 mt-4">
+                                    <div className="text-left">
+                                        <div className="text-[10px] font-black text-slate-400 uppercase mb-1">Advance Paid</div>
+                                        <div className="text-sm font-black text-amber-600">{contract.currency} {(contract.totalAdvancePaid || 0).toLocaleString()}</div>
+                                    </div>
+                                    <div className="text-right">
+                                        <div className="text-[10px] font-black text-slate-400 uppercase mb-1">Balance</div>
+                                        <div className="text-sm font-black text-slate-600">{contract.currency} {((contract.totalAmount || contract.totalValue || 0) - (contract.totalAdvancePaid || 0)).toLocaleString()}</div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -237,11 +277,11 @@ export const PurchaseContractManager: React.FC<PurchaseContractManagerProps> = (
                             )}
                             {contract.status === ContractStatus.ACTIVE && (
                                 <>
-                                    <button onClick={() => { setReceivingContract(contract); setShowReceiptForm(true); }} className="w-full py-3 bg-emerald-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2">
+                                    <button onClick={() => { setReceivingContract(contract); setShowReceiptForm(true); }} className="w-full py-3 bg-emerald-600 text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-emerald-700 transition-colors">
                                         <PackageOpen className="w-5 h-5" /> Receive Cargo
                                     </button>
-                                    <button onClick={() => handleRecordInvoice(contract)} className="w-full py-3 bg-slate-900 text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2">
-                                        <Receipt className="w-5 h-5" /> Ingest Bill
+                                    <button onClick={() => setAdvancingContract(contract)} className="w-full py-3 bg-amber-500 text-white rounded-2xl font-black text-sm uppercase tracking-widest flex items-center justify-center gap-2 hover:bg-amber-600 transition-colors">
+                                        <Receipt className="w-5 h-5" /> Pay Advance
                                     </button>
                                 </>
                             )}
@@ -268,7 +308,6 @@ export const PurchaseContractManager: React.FC<PurchaseContractManagerProps> = (
                     commodityTypes={commodityTypes}
                     locations={locations}
                     onSave={async (data) => {
-                        // Service call logic integrated here for simplicity of task demonstration
                         alert("Goods Receipt processed successfully via Warehouse Service");
                         loadData();
                         setShowReceiptForm(false);
@@ -276,6 +315,52 @@ export const PurchaseContractManager: React.FC<PurchaseContractManagerProps> = (
                     onCancel={() => { setShowReceiptForm(false); setReceivingContract(null); }}
                     isLoading={isSubmitting}
                 />
+            )}
+
+            {advancingContract && (
+                <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-[2rem] p-8 w-full max-w-md shadow-2xl">
+                        <div className="flex justify-between items-center mb-6">
+                            <h3 className="text-xl font-black text-slate-900">Record Advance Payment</h3>
+                            <button onClick={() => setAdvancingContract(null)} className="text-slate-400 hover:text-slate-600">
+                                <XCircle className="w-6 h-6" />
+                            </button>
+                        </div>
+                        <div className="space-y-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 mb-1">Contract Number</label>
+                                <div className="font-mono bg-slate-50 px-3 py-2 rounded-xl text-slate-700">{advancingContract.contractNumber}</div>
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 mb-1">Amount ({advancingContract.currency})</label>
+                                <input
+                                    type="number"
+                                    value={advanceAmount}
+                                    onChange={(e) => setAdvanceAmount(e.target.value)}
+                                    className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-amber-500 font-bold"
+                                    placeholder="Enter advance amount..."
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 mb-1">Reference Number</label>
+                                <input
+                                    type="text"
+                                    value={advanceReference}
+                                    onChange={(e) => setAdvanceReference(e.target.value)}
+                                    className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-amber-500"
+                                    placeholder="Check # or Bank Transfer ID"
+                                />
+                            </div>
+                            <button
+                                onClick={handleRecordAdvance}
+                                disabled={isSubmitting || !advanceAmount}
+                                className="w-full mt-4 bg-amber-500 hover:bg-amber-600 text-white font-black py-4 rounded-xl shadow-lg shadow-amber-200 transition-all disabled:opacity-50"
+                            >
+                                {isSubmitting ? 'Saving...' : 'Confirm Payment'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
             )}
         </div>
     );

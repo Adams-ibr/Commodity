@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Shipment, ShipmentStatus, SalesContract, Buyer, DocumentType } from '../types_commodity';
-import { Ship, Anchor, Search, Plus, FileText, Download, Loader2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Ship, Anchor, Search, Plus, FileText, Download, Loader2, ChevronLeft, ChevronRight, X, Save, Edit3 } from 'lucide-react';
 import { UserRole } from '../types_commodity';
 import { api } from '../services/api';
 
@@ -23,6 +23,10 @@ export const ShipmentManager: React.FC<ShipmentManagerProps> = ({
     const [isGenerating, setIsGenerating] = useState<string | null>(null);
     const [page, setPage] = useState(1);
     const [totalRecords, setTotalRecords] = useState(0);
+
+    const [trackingShipment, setTrackingShipment] = useState<Shipment | null>(null);
+    const [trackingForm, setTrackingForm] = useState<Partial<Shipment>>({});
+    const [isUpdatingTracking, setIsUpdatingTracking] = useState(false);
 
     useEffect(() => {
         loadData();
@@ -51,6 +55,38 @@ export const ShipmentManager: React.FC<ShipmentManagerProps> = ({
     };
 
     const totalPages = Math.max(1, Math.ceil(totalRecords / ITEMS_PER_PAGE));
+
+    const handleOpenTracking = (shipment: Shipment) => {
+        setTrackingShipment(shipment);
+        setTrackingForm({
+            status: shipment.status,
+            bookingRef: shipment.bookingRef || '',
+            vesselName: shipment.vesselName || '',
+            loadingPort: shipment.loadingPort || '',
+            destinationPort: shipment.destinationPort || '',
+            dischargePlace: shipment.dischargePlace || ''
+        });
+    };
+
+    const handleSaveTracking = async () => {
+        if (!trackingShipment) return;
+        setIsUpdatingTracking(true);
+        try {
+            const res = await api.sales.updateShipmentStatus(trackingShipment.id, trackingForm.status as ShipmentStatus, trackingForm);
+            if (res.success && res.data) {
+                setShipments(prev => prev.map(s => s.id === trackingShipment.id ? { ...s, ...trackingForm } as Shipment : s));
+                if (onAuditLog) onAuditLog('SHIPMENT_TRACKING_UPDATED', `Updated tracking details for shipment ${trackingShipment.shipmentNumber}`);
+                setTrackingShipment(null);
+            } else {
+                alert(res.error || 'Failed to update tracking');
+            }
+        } catch (error) {
+            console.error(error);
+            alert('Error updating tracking details');
+        } finally {
+            setIsUpdatingTracking(false);
+        }
+    };
 
     const handleGenerateWaybill = async (shipment: Shipment) => {
         const contract = contracts.find(c => c.id === shipment.salesContractId);
@@ -207,6 +243,13 @@ export const ShipmentManager: React.FC<ShipmentManagerProps> = ({
                                                 <FileText className="w-4 h-4" />
                                             )}
                                         </button>
+                                        <button
+                                            onClick={() => handleOpenTracking(s)}
+                                            className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded transition-colors"
+                                            title="Update Tracking Info"
+                                        >
+                                            <Edit3 className="w-4 h-4" />
+                                        </button>
                                     </td>
                                 </tr>
                             ))}
@@ -247,6 +290,114 @@ export const ShipmentManager: React.FC<ShipmentManagerProps> = ({
                     </div>
                 </div>
             </div>
+
+            {/* Tracking Modal */}
+            {trackingShipment && (
+                <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+                        <div className="flex items-center justify-between p-6 border-b border-slate-100">
+                            <div>
+                                <h2 className="text-xl font-bold text-slate-800">Update Tracking Status</h2>
+                                <p className="text-sm text-slate-500">Ref: {trackingShipment.shipmentNumber}</p>
+                            </div>
+                            <button
+                                onClick={() => setTrackingShipment(null)}
+                                className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                                <select
+                                    value={trackingForm.status}
+                                    onChange={(e) => setTrackingForm({ ...trackingForm, status: e.target.value as ShipmentStatus })}
+                                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 bg-white shadow-sm"
+                                >
+                                    {Object.values(ShipmentStatus).map(s => (
+                                        <option key={s} value={s}>{s.replace(/_/g, ' ')}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Booking Ref</label>
+                                    <input
+                                        type="text"
+                                        value={trackingForm.bookingRef || ''}
+                                        onChange={(e) => setTrackingForm({ ...trackingForm, bookingRef: e.target.value })}
+                                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                        placeholder="E.g. MEDU123456"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Vessel Name</label>
+                                    <input
+                                        type="text"
+                                        value={trackingForm.vesselName || ''}
+                                        onChange={(e) => setTrackingForm({ ...trackingForm, vesselName: e.target.value })}
+                                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Port of Loading</label>
+                                    <input
+                                        type="text"
+                                        value={trackingForm.loadingPort || ''}
+                                        onChange={(e) => setTrackingForm({ ...trackingForm, loadingPort: e.target.value })}
+                                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 mb-1">Destination Port</label>
+                                    <input
+                                        type="text"
+                                        value={trackingForm.destinationPort || ''}
+                                        onChange={(e) => setTrackingForm({ ...trackingForm, destinationPort: e.target.value })}
+                                        className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                    />
+                                </div>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-slate-700 mb-1">Discharge Place / Warehouse</label>
+                                <input
+                                    type="text"
+                                    value={trackingForm.dischargePlace || ''}
+                                    onChange={(e) => setTrackingForm({ ...trackingForm, dischargePlace: e.target.value })}
+                                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="Warehouse tracking"
+                                />
+                            </div>
+                        </div>
+                        <div className="flex justify-end gap-3 p-6 border-t border-slate-100 bg-slate-50 rounded-b-xl">
+                            <button
+                                onClick={() => setTrackingShipment(null)}
+                                className="px-5 py-2 text-slate-600 font-medium hover:bg-slate-200 rounded-lg transition-colors border border-slate-300 bg-white"
+                                disabled={isUpdatingTracking}
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={handleSaveTracking}
+                                disabled={isUpdatingTracking}
+                                className="px-5 py-2 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors flex items-center justify-center min-w-[120px]"
+                            >
+                                {isUpdatingTracking ? (
+                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                ) : (
+                                    <>
+                                        <Save className="w-4 h-4 mr-2" />
+                                        Save Updates
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

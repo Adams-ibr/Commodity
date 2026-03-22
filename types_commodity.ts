@@ -307,7 +307,19 @@ export interface PurchaseContract {
   qualitySpecifications?: Record<string, any>;
   status: ContractStatus;
   items?: PurchaseContractItem[]; // Multi-item support
+  advancePayments?: AdvancePayment[];
+  totalAdvancePaid?: number;
   createdBy: string;
+  createdAt: string;
+}
+
+export interface AdvancePayment {
+  id: string;
+  contractId: string;
+  amount: number;
+  paymentDate: string;
+  referenceNumber?: string;
+  notes?: string;
   createdAt: string;
 }
 
@@ -384,6 +396,11 @@ export interface CommodityBatch {
   costPerTon: number;
   totalCost: number;
   currency: string;
+  truckNumber?: string;
+  driverName?: string;
+  driverPhone?: string;
+  quantityLoaded?: number;
+  discrepancyWeight?: number;
   notes?: string;
   createdBy: string;
   createdAt: string;
@@ -416,6 +433,12 @@ export interface BatchMovement {
   quantity: number;
   movementDate: string;
   referenceNumber?: string;
+  truckNumber?: string;
+  driverName?: string;
+  driverPhone?: string;
+  transitStatus?: 'LOADING' | 'IN_TRANSIT' | 'DELIVERED';
+  quantityLoaded?: number;
+  quantityReceived?: number;
   performedBy: string;
   notes?: string;
   createdAt: string;
@@ -488,6 +511,10 @@ export interface ProcessingOrder {
   processingType: ProcessingType;
   status: ProcessingStatus;
   supervisorId: string;
+  dryingCost?: number;
+  stitchingCost?: number;
+  cleaningCost?: number;
+  totalProcessingCost?: number;
   notes?: string;
   createdAt: string;
 }
@@ -496,7 +523,10 @@ export enum ProcessingType {
   CLEANING = 'CLEANING',
   SORTING = 'SORTING',
   PACKAGING = 'PACKAGING',
-  BLENDING = 'BLENDING'
+  BLENDING = 'BLENDING',
+  DRYING = 'DRYING',
+  STITCHING = 'STITCHING',
+  MULTIPLE = 'MULTIPLE'
 }
 
 export enum ProcessingStatus {
@@ -587,8 +617,10 @@ export interface Shipment {
   buyerId: string;
   vesselName?: string;
   containerNumbers?: string[];
+  bookingRef?: string;
   loadingPort?: string;
   destinationPort?: string;
+  dischargePlace?: string;
   estimatedDeparture?: string;
   actualDeparture?: string;
   estimatedArrival?: string;
@@ -608,7 +640,11 @@ export interface Shipment {
 export enum ShipmentStatus {
   PLANNED = 'PLANNED',
   LOADING = 'LOADING',
+  GATEIN_IN_PROGRESS = 'GATEIN_IN_PROGRESS',
+  STUFFED = 'STUFFED',
+  AWAITING_VESSEL = 'AWAITING_VESSEL',
   SHIPPED = 'SHIPPED',
+  SAILED = 'SAILED',
   DELIVERED = 'DELIVERED'
 }
 

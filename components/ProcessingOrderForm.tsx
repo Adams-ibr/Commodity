@@ -24,7 +24,10 @@ export const ProcessingOrderForm: React.FC<ProcessingOrderFormProps> = ({
         processingDate: order?.processingDate ? new Date(order.processingDate).toISOString().split('T')[0] : '',
         notes: order?.notes || '',
         inputBatchId: '',
-        inputQuantity: ''
+        inputQuantity: '',
+        dryingCost: order?.dryingCost || '',
+        stitchingCost: order?.stitchingCost || '',
+        cleaningCost: order?.cleaningCost || ''
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
@@ -66,6 +69,10 @@ export const ProcessingOrderForm: React.FC<ProcessingOrderFormProps> = ({
             processingDate: formData.processingDate ? new Date(formData.processingDate).toISOString() : undefined,
             notes: formData.notes,
             supervisorId: order?.supervisorId || 'admin',
+            dryingCost: Number(formData.dryingCost) || 0,
+            stitchingCost: Number(formData.stitchingCost) || 0,
+            cleaningCost: Number(formData.cleaningCost) || 0,
+            totalProcessingCost: (Number(formData.dryingCost) || 0) + (Number(formData.stitchingCost) || 0) + (Number(formData.cleaningCost) || 0),
             // UI-only properties to simulate input/output creation 
             _inputBatchId: formData.inputBatchId,
             _inputQuantity: Number(formData.inputQuantity)
@@ -195,6 +202,51 @@ export const ProcessingOrderForm: React.FC<ProcessingOrderFormProps> = ({
                                 />
                                 {errors.inputQuantity && <p className="text-red-500 text-xs mt-1">{errors.inputQuantity}</p>}
                             </div>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 mb-6">
+                        <h3 className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                            <Plus className="w-4 h-4 text-indigo-600" />
+                            Processing Cost Allocation (per MT)
+                        </h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Drying</label>
+                                <input
+                                    type="number"
+                                    value={formData.dryingCost}
+                                    onChange={(e) => setFormData({ ...formData, dryingCost: e.target.value })}
+                                    className="w-full px-4 py-3 border border-slate-200 rounded-lg text-lg font-black font-mono focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="0.00"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Stitching</label>
+                                <input
+                                    type="number"
+                                    value={formData.stitchingCost}
+                                    onChange={(e) => setFormData({ ...formData, stitchingCost: e.target.value })}
+                                    className="w-full px-4 py-3 border border-slate-200 rounded-lg text-lg font-black font-mono focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="0.00"
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-xs font-bold text-slate-500 uppercase tracking-widest mb-1">Cleaning</label>
+                                <input
+                                    type="number"
+                                    value={formData.cleaningCost}
+                                    onChange={(e) => setFormData({ ...formData, cleaningCost: e.target.value })}
+                                    className="w-full px-4 py-3 border border-slate-200 rounded-lg text-lg font-black font-mono focus:ring-2 focus:ring-indigo-500"
+                                    placeholder="0.00"
+                                />
+                            </div>
+                        </div>
+                        <div className="mt-4 pt-4 border-t border-slate-200 flex justify-between items-center text-sm font-bold">
+                            <span className="text-slate-500">Total Processing Cost Projection</span>
+                            <span className="text-lg text-indigo-600">
+                                {((Number(formData.dryingCost) || 0) + (Number(formData.stitchingCost) || 0) + (Number(formData.cleaningCost) || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </span>
                         </div>
                     </div>
 

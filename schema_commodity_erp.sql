@@ -158,8 +158,20 @@ CREATE TABLE IF NOT EXISTS purchase_contracts (
   currency TEXT DEFAULT 'NGN',
   payment_terms TEXT,
   quality_specifications JSONB,
+  total_advance_paid DECIMAL(15,2) DEFAULT 0,
   status TEXT DEFAULT 'ACTIVE', -- 'ACTIVE', 'COMPLETED', 'CANCELLED'
   created_by UUID REFERENCES users(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Advance Payments
+CREATE TABLE IF NOT EXISTS advance_payments (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  contract_id UUID REFERENCES purchase_contracts(id),
+  amount DECIMAL(15,2) NOT NULL,
+  payment_date DATE NOT NULL,
+  reference_number TEXT,
+  notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );-- =========
 ============================================
@@ -185,6 +197,11 @@ CREATE TABLE IF NOT EXISTS commodity_batches (
   cost_per_ton DECIMAL(15,2),
   total_cost DECIMAL(15,2),
   currency TEXT DEFAULT 'NGN',
+  truck_number TEXT,
+  driver_name TEXT,
+  driver_phone TEXT,
+  quantity_loaded DECIMAL(15,3),
+  discrepancy_weight DECIMAL(15,3),
   notes TEXT,
   created_by UUID REFERENCES users(id),
   created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -202,6 +219,12 @@ CREATE TABLE IF NOT EXISTS batch_movements (
   quantity DECIMAL(15,3),
   movement_date DATE,
   reference_number TEXT,
+  truck_number TEXT,
+  driver_name TEXT,
+  driver_phone TEXT,
+  transit_status TEXT DEFAULT 'DELIVERED', -- 'LOADING', 'IN_TRANSIT', 'DELIVERED'
+  quantity_loaded DECIMAL(15,3),
+  quantity_received DECIMAL(15,3),
   performed_by UUID REFERENCES users(id),
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
@@ -260,9 +283,13 @@ CREATE TABLE IF NOT EXISTS processing_orders (
   processing_plant_id UUID REFERENCES locations(id),
   order_date DATE,
   processing_date DATE,
-  processing_type TEXT, -- 'CLEANING', 'SORTING', 'PACKAGING', 'BLENDING'
+  processing_type TEXT, -- 'CLEANING', 'SORTING', 'PACKAGING', 'BLENDING', 'DRYING', 'STITCHING', 'MULTIPLE'
   status TEXT DEFAULT 'PLANNED', -- 'PLANNED', 'IN_PROGRESS', 'COMPLETED', 'CANCELLED'
   supervisor_id UUID REFERENCES users(id),
+  drying_cost DECIMAL(15,2) DEFAULT 0,
+  stitching_cost DECIMAL(15,2) DEFAULT 0,
+  cleaning_cost DECIMAL(15,2) DEFAULT 0,
+  total_processing_cost DECIMAL(15,2) DEFAULT 0,
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -357,7 +384,9 @@ CREATE TABLE IF NOT EXISTS shipments (
   insurance_cost DECIMAL(15,2),
   other_charges DECIMAL(15,2),
   bill_of_lading TEXT,
-  status TEXT DEFAULT 'PLANNED', -- 'PLANNED', 'LOADING', 'SHIPPED', 'DELIVERED'
+  booking_ref TEXT,
+  discharge_place TEXT,
+  status TEXT DEFAULT 'PLANNED', -- 'PLANNED', 'GATEIN_IN_PROGRESS', 'STUFFED', 'AWAITING_VESSEL', 'SHIPPED', 'SAILED', 'DELIVERED'
   created_by UUID REFERENCES users(id),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );

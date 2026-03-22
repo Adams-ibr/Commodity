@@ -229,6 +229,11 @@ export const ProcessingManager: React.FC<ProcessingManagerProps> = ({
                                     <td className="px-6 py-4" onClick={() => handleEditOrder(order)}>
                                         <div className="font-bold text-indigo-700 hover:text-indigo-800">{order.orderNumber}</div>
                                         <div className="text-xs text-slate-500 mt-1">ID: {order.id.slice(0, 8)}...</div>
+                                        {order.totalProcessingCost !== undefined && order.totalProcessingCost > 0 && (
+                                            <div className="text-xs font-bold text-slate-600 mt-1">
+                                                Est. Cost: ₦{order.totalProcessingCost.toLocaleString()}
+                                            </div>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4" onClick={() => handleEditOrder(order)}>
                                         <span className="inline-block px-2 py-1 bg-slate-100 text-xs font-medium rounded border border-slate-200 mb-1">

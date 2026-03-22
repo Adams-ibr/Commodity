@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { PackageOpen, Save, X, Calculator, Search, Layers, CheckCircle } from 'lucide-react';
+import { PackageOpen, Save, X, Calculator, Search, Layers, CheckCircle, AlertTriangle } from 'lucide-react';
 import { PurchaseContract, Supplier, CommodityType, CommodityBatch, BatchStatus, PurchaseContractItem, Location } from '../types_commodity';
 
 interface GoodsReceiptFormProps {
@@ -30,6 +30,10 @@ export const GoodsReceiptForm: React.FC<GoodsReceiptFormProps> = ({
         cropYear: new Date().getFullYear().toString(),
         receivedDate: new Date().toISOString().split('T')[0],
         receivedWeight: '',
+        quantityLoaded: '',
+        truckNumber: '',
+        driverName: '',
+        driverPhone: '',
         bagCount: '',
         bagWeight: '',
         costPerTon: '',
@@ -111,6 +115,11 @@ export const GoodsReceiptForm: React.FC<GoodsReceiptFormProps> = ({
             receivedWeight: weight,
             currentWeight: weight,
             grade: formData.grade,
+            truckNumber: formData.truckNumber,
+            driverName: formData.driverName,
+            driverPhone: formData.driverPhone,
+            quantityLoaded: Number(formData.quantityLoaded) || weight,
+            discrepancyWeight: (Number(formData.quantityLoaded) || weight) - weight,
             packagingInfo: JSON.stringify({
                 bagCount: Number(formData.bagCount) || 0,
                 bagWeight: Number(formData.bagWeight) || 0,
@@ -220,18 +229,51 @@ export const GoodsReceiptForm: React.FC<GoodsReceiptFormProps> = ({
                                 </h3>
 
                                 <div className="grid grid-cols-2 gap-6">
+                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Truck / Container #</label>
+                                        <input
+                                            type="text"
+                                            value={formData.truckNumber}
+                                            onChange={(e) => handleInputChange('truckNumber', e.target.value)}
+                                            placeholder="e.g. KSF-123-XY"
+                                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-100 transition-all"
+                                        />
+                                    </div>
+                                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Driver Name</label>
+                                        <input
+                                            type="text"
+                                            value={formData.driverName}
+                                            onChange={(e) => handleInputChange('driverName', e.target.value)}
+                                            placeholder="e.g. John Doe"
+                                            className="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl font-bold text-slate-800 outline-none focus:ring-2 focus:ring-emerald-100 transition-all"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
                                     <div>
-                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Received MT *</label>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Loaded Qty (MT)</label>
+                                        <input
+                                            type="number"
+                                            value={formData.quantityLoaded}
+                                            onChange={(e) => handleInputChange('quantityLoaded', e.target.value)}
+                                            placeholder="0.00"
+                                            className="w-full px-4 py-4 bg-white border border-slate-200 rounded-2xl text-xl font-black text-slate-700 outline-none focus:ring-4 focus:ring-indigo-100 transition-all"
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-black text-emerald-600 uppercase tracking-widest mb-2">Received Qty (MT) *</label>
                                         <input
                                             type="number"
                                             value={formData.receivedWeight}
                                             onChange={(e) => handleInputChange('receivedWeight', e.target.value)}
                                             placeholder="0.00"
-                                            className="w-full px-4 py-4 bg-white border border-slate-200 rounded-2xl text-2xl font-black text-emerald-600 outline-none focus:ring-4 focus:ring-emerald-100 transition-all placeholder:text-slate-200"
+                                            className="w-full px-4 py-4 bg-emerald-50 border border-emerald-200 rounded-2xl text-xl font-black text-emerald-700 outline-none focus:ring-4 focus:ring-emerald-100 transition-all"
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest mb-2">Location</label>
+                                        <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2">Location</label>
                                         <select
                                             value={formData.locationId}
                                             onChange={(e) => handleInputChange('locationId', e.target.value)}
@@ -241,6 +283,12 @@ export const GoodsReceiptForm: React.FC<GoodsReceiptFormProps> = ({
                                         </select>
                                     </div>
                                 </div>
+                                {formData.quantityLoaded && formData.receivedWeight && Number(formData.quantityLoaded) > Number(formData.receivedWeight) && (
+                                    <div className="flex items-center gap-2 text-rose-600 bg-rose-50 p-4 rounded-xl text-sm font-bold">
+                                        <AlertTriangle className="w-5 h-5" />
+                                        Discrepancy Detected: {(Number(formData.quantityLoaded) - Number(formData.receivedWeight)).toFixed(3)} MT short.
+                                    </div>
+                                )}
 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="p-4 bg-white border border-slate-100 rounded-2xl">
