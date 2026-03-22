@@ -39,10 +39,10 @@ export const INGESTION_SCHEMAS: Record<string, IngestionSchema> = {
             { name: 'supplier_id', label: 'Supplier ID', required: true, aliases: ['Supplier', 'Vendor ID'] },
             { name: 'location_id', label: 'Location ID', required: true, aliases: ['Warehouse ID', 'Location'] },
             { name: 'received_date', label: 'Received Date', required: true, type: 'date', aliases: ['Date', 'ReceivedAt'] },
-            { name: 'received_weight', label: 'Received Weight', required: true, type: 'number', aliases: ['Weight', 'Qty', 'Quantity'] },
-            { name: 'current_weight', label: 'Current Weight', required: true, type: 'number', aliases: ['Current Qty'] },
-            { name: 'cost_per_ton', label: 'Cost Per Ton', type: 'number', aliases: ['Price', 'Rate'] },
-            { name: 'currency', label: 'Currency', defaultValue: 'NGN', aliases: ['Curr'] },
+            { name: 'received_weight', label: 'Received Weight', required: true, type: 'number', aliases: ['Weight', 'Qty', 'Quantity', 'Net Weight', 'Gross Weight', 'Tons', 'Metric Tons'] },
+            { name: 'current_weight', label: 'Current Weight', required: true, type: 'number', aliases: ['Current Qty', 'Remaining Weight', 'Stock Qty'] },
+            { name: 'cost_per_ton', label: 'Cost Per Ton', type: 'number', aliases: ['Price', 'Rate', 'Unit Cost', 'Buying Price'] },
+            { name: 'currency', label: 'Currency', defaultValue: 'NGN', aliases: ['Curr', 'Currency Code'] },
             { name: 'truck_number', label: 'Truck Number', aliases: ['Truck', 'Vehicle'] },
             { name: 'driver_name', label: 'Driver Name', aliases: ['Driver'] },
             { name: 'grade', label: 'Grade', aliases: ['Quality'] },
@@ -113,22 +113,24 @@ export class IngestionService {
     }
 
     /**
-     * Suggest mapping based on field names and aliases
+     * Suggest mapping based on field names and aliases with robust matching
      */
     suggestMapping(columns: string[], schemaKey: string): FieldMapping[] {
         const schema = INGESTION_SCHEMAS[schemaKey];
         if (!schema) return [];
 
+        const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+
         return schema.fields.map(field => {
-            const fieldLower = field.name.toLowerCase();
-            const labelLower = field.label.toLowerCase();
-            const aliases = (field.aliases || []).map(a => a.toLowerCase());
+            const normalizedField = normalize(field.name);
+            const normalizedLabel = normalize(field.label);
+            const normalizedAliases = (field.aliases || []).map(normalize);
 
             const match = columns.find(col => {
-                const colLower = col.toLowerCase();
-                return colLower === fieldLower ||
-                    colLower === labelLower ||
-                    aliases.includes(colLower);
+                const normalizedCol = normalize(col);
+                return normalizedCol === normalizedField ||
+                    normalizedCol === normalizedLabel ||
+                    normalizedAliases.includes(normalizedCol);
             });
 
             return {
