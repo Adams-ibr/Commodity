@@ -46,6 +46,10 @@ export const ExcelIngestionEngine: React.FC<ExcelIngestionEngineProps> = ({ onAu
         setIsProcessing(true);
         try {
             setFile(selectedFile);
+
+            // First load necessary reference data for intelligent ID resolution
+            await ingestionService.loadReferences(selectedTable);
+
             const { columns: cols, data: rows } = await ingestionService.parseFile(selectedFile);
             setColumns(cols);
             setRawData(rows);
@@ -135,10 +139,10 @@ export const ExcelIngestionEngine: React.FC<ExcelIngestionEngineProps> = ({ onAu
                         <React.Fragment key={step.id}>
                             <div className="flex flex-col items-center">
                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center border-2 transition-all duration-300 ${currentStep === step.id
-                                        ? 'border-indigo-600 bg-indigo-600 text-white shadow-lg shadow-indigo-200'
-                                        : (idx < ['upload', 'mapping', 'preview', 'result'].indexOf(currentStep)
-                                            ? 'border-green-500 bg-green-500 text-white'
-                                            : 'border-slate-200 bg-white text-slate-400')
+                                    ? 'border-indigo-600 bg-indigo-600 text-white shadow-lg shadow-indigo-200'
+                                    : (idx < ['upload', 'mapping', 'preview', 'result'].indexOf(currentStep)
+                                        ? 'border-green-500 bg-green-500 text-white'
+                                        : 'border-slate-200 bg-white text-slate-400')
                                     }`}>
                                     {idx < ['upload', 'mapping', 'preview', 'result'].indexOf(currentStep) ? (
                                         <Check className="w-5 h-5" />
@@ -171,8 +175,8 @@ export const ExcelIngestionEngine: React.FC<ExcelIngestionEngineProps> = ({ onAu
                                         key={key}
                                         onClick={() => setSelectedTable(key)}
                                         className={`p-4 text-left border-2 rounded-xl transition-all ${selectedTable === key
-                                                ? 'border-indigo-600 bg-indigo-50 shadow-sm'
-                                                : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
+                                            ? 'border-indigo-600 bg-indigo-50 shadow-sm'
+                                            : 'border-slate-100 hover:border-slate-200 hover:bg-slate-50'
                                             }`}
                                     >
                                         <div className={`w-8 h-8 rounded-lg flex items-center justify-center mb-3 ${selectedTable === key ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'

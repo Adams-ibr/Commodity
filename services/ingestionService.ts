@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { dbCreateBulk, COLLECTIONS } from './supabaseDb';
+import { dbCreateBulk, dbList, COLLECTIONS, Query } from './supabaseDb';
 
 export interface IngestionField {
     name: string;
@@ -9,6 +9,7 @@ export interface IngestionField {
     aliases?: string[];
     options?: string[];
     defaultValue?: any;
+    resolveFrom?: string; // Table name to resolve name -> id
 }
 
 export interface IngestionSchema {
@@ -35,9 +36,9 @@ export const INGESTION_SCHEMAS: Record<string, IngestionSchema> = {
         label: 'Commodity Batches',
         fields: [
             { name: 'batch_number', label: 'Batch Number', required: true, aliases: ['Batch #', 'Batch No', 'BatchNo', 'Code'] },
-            { name: 'commodity_type_id', label: 'Commodity Type ID', required: true, aliases: ['Commodity ID', 'Type ID'] },
-            { name: 'supplier_id', label: 'Supplier ID', required: true, aliases: ['Supplier', 'Vendor ID'] },
-            { name: 'location_id', label: 'Location ID', required: true, aliases: ['Warehouse ID', 'Location'] },
+            { name: 'commodity_type_id', label: 'Commodity Type', required: true, resolveFrom: COLLECTIONS.COMMODITY_TYPES, aliases: ['Commodity', 'Type'] },
+            { name: 'supplier_id', label: 'Supplier', required: true, resolveFrom: COLLECTIONS.SUPPLIERS, aliases: ['Vendor', 'Farmer'] },
+            { name: 'location_id', label: 'Location', required: true, resolveFrom: COLLECTIONS.LOCATIONS, aliases: ['Warehouse', 'Storage'] },
             { name: 'received_date', label: 'Received Date', required: true, type: 'date', aliases: ['Date', 'ReceivedAt'] },
             { name: 'received_weight', label: 'Received Weight', required: true, type: 'number', aliases: ['Weight', 'Qty', 'Quantity', 'Net Weight', 'Gross Weight', 'Tons', 'Metric Tons'] },
             { name: 'current_weight', label: 'Current Weight', required: true, type: 'number', aliases: ['Current Qty', 'Remaining Weight', 'Stock Qty'] },
@@ -54,8 +55,8 @@ export const INGESTION_SCHEMAS: Record<string, IngestionSchema> = {
         fields: [
             { name: 'name', label: 'Name', required: true, aliases: ['Supplier Name', 'Farmer Name', 'Full Name'] },
             { name: 'type', label: 'Type', required: true, options: ['FARMER', 'AGGREGATOR', 'COOPERATIVE'], defaultValue: 'FARMER' },
-            { name: 'email', label: 'Email', aliases: ['Email Address'] },
-            { name: 'phone', label: 'Phone', aliases: ['Phone Number', 'Contact'] },
+            { name: 'email', label: 'Email', aliases: ['Email Address', 'Mail'] },
+            { name: 'phone', label: 'Phone', aliases: ['Phone Number', 'Contact', 'Mobile'] },
             { name: 'registration_number', label: 'Reg Number', aliases: ['RC Number', 'ID Number'] },
             { name: 'contact_person', label: 'Contact Person' },
         ]
@@ -74,8 +75,17 @@ export const INGESTION_SCHEMAS: Record<string, IngestionSchema> = {
 };
 
 export class IngestionService {
+    private cache: Record<string, Map<string, string>> = {};
+
     /**
-     * Parse an Excel/CSV file into an array of objects
+     * Normalize strings for comparison
+     */
+    private normalize(s: string): string {
+        return String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '').trim();
+    }
+
+    /**
+     * Parse an Excel/CSV file
      */
     async parseFile(file: File): Promise<{ columns: string[], data: any[] }> {
         return new Promise((resolve, reject) => {
@@ -113,21 +123,19 @@ export class IngestionService {
     }
 
     /**
-     * Suggest mapping based on field names and aliases with robust matching
+     * Suggest mapping based on field names and aliases
      */
     suggestMapping(columns: string[], schemaKey: string): FieldMapping[] {
         const schema = INGESTION_SCHEMAS[schemaKey];
         if (!schema) return [];
 
-        const normalize = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
-
         return schema.fields.map(field => {
-            const normalizedField = normalize(field.name);
-            const normalizedLabel = normalize(field.label);
-            const normalizedAliases = (field.aliases || []).map(normalize);
+            const normalizedField = this.normalize(field.name);
+            const normalizedLabel = this.normalize(field.label);
+            const normalizedAliases = (field.aliases || []).map(a => this.normalize(a));
 
             const match = columns.find(col => {
-                const normalizedCol = normalize(col);
+                const normalizedCol = this.normalize(col);
                 return normalizedCol === normalizedField ||
                     normalizedCol === normalizedLabel ||
                     normalizedAliases.includes(normalizedCol);
@@ -141,7 +149,28 @@ export class IngestionService {
     }
 
     /**
-     * Map raw data to the database schema
+     * Load reference data for identifier resolution
+     */
+    async loadReferences(schemaKey: string) {
+        const schema = INGESTION_SCHEMAS[schemaKey];
+        if (!schema) return;
+
+        for (const field of schema.fields) {
+            if (field.resolveFrom && !this.cache[field.resolveFrom]) {
+                console.log(`Loading references for ${field.resolveFrom}...`);
+                const { data } = await dbList(field.resolveFrom, [Query.limit(1000)]);
+                const map = new Map<string, string>();
+                (data || []).forEach((item: any) => {
+                    if (item.name) map.set(this.normalize(item.name), item.id);
+                    if (item.code) map.set(this.normalize(item.code), item.id);
+                });
+                this.cache[field.resolveFrom] = map;
+            }
+        }
+    }
+
+    /**
+     * Map raw data to the database schema with identifier resolution
      */
     transformData(rawData: any[], mappings: FieldMapping[], schemaKey: string): any[] {
         const schema = INGESTION_SCHEMAS[schemaKey];
@@ -161,17 +190,29 @@ export class IngestionService {
                     value = field.defaultValue;
                 }
 
+                // Identifier Resolution
+                if (field.resolveFrom && value && typeof value === 'string' && value.length > 0) {
+                    const normalizedValue = this.normalize(value);
+                    const resolvedId = this.cache[field.resolveFrom]?.get(normalizedValue);
+                    if (resolvedId) {
+                        value = resolvedId;
+                    }
+                }
+
                 // Type conversion
                 if (value !== undefined && value !== null) {
                     if (field.type === 'number') {
                         value = Number(String(value).replace(/[^0-9.-]+/g, ''));
                     } else if (field.type === 'date') {
-                        // Handle Excel serial dates or string dates
                         if (typeof value === 'number') {
                             const date = new Date((value - 25569) * 86400 * 1000);
                             value = date.toISOString().split('T')[0];
                         } else {
-                            value = new Date(value).toISOString().split('T')[0];
+                            try {
+                                value = new Date(value).toISOString().split('T')[0];
+                            } catch (e) {
+                                console.warn(`Invalid date: ${value}`);
+                            }
                         }
                     } else if (field.type === 'boolean') {
                         value = String(value).toLowerCase() === 'true' || value === 1 || String(value).toLowerCase() === 'yes';
@@ -186,7 +227,7 @@ export class IngestionService {
     }
 
     /**
-     * Bulk ingest data into the database
+     * Bulk ingest data
      */
     async ingest(table: string, data: any[]): Promise<IngestionResult> {
         const { data: result, error } = await dbCreateBulk(table, data);
