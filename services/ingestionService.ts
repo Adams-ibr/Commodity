@@ -38,6 +38,7 @@ export const INGESTION_SCHEMAS: Record<string, IngestionSchema> = {
             { name: 'batch_number', label: 'Batch Number', required: true, aliases: ['Batch #', 'Batch No', 'BatchNo', 'Code'] },
             { name: 'commodity_type_id', label: 'Commodity Type', required: true, resolveFrom: COLLECTIONS.COMMODITY_TYPES, aliases: ['Commodity', 'Type'] },
             { name: 'supplier_id', label: 'Supplier', required: true, resolveFrom: COLLECTIONS.SUPPLIERS, aliases: ['Vendor', 'Farmer'] },
+            { name: 'purchase_contract_id', label: 'Purchase Contract', resolveFrom: COLLECTIONS.PURCHASE_CONTRACTS, aliases: ['Contract #', 'Contract Number', 'PO Number', 'Purchase Contract'] },
             { name: 'location_id', label: 'Location', required: true, resolveFrom: COLLECTIONS.LOCATIONS, aliases: ['Warehouse', 'Storage'] },
             { name: 'received_date', label: 'Received Date', required: true, type: 'date', aliases: ['Date', 'ReceivedAt'] },
             { name: 'received_weight', label: 'Received Weight', required: true, type: 'number', aliases: ['Weight', 'Qty', 'Quantity', 'Net Weight', 'Gross Weight', 'Tons', 'Metric Tons'] },
@@ -48,6 +49,32 @@ export const INGESTION_SCHEMAS: Record<string, IngestionSchema> = {
             { name: 'driver_name', label: 'Driver Name', aliases: ['Driver'] },
             { name: 'grade', label: 'Grade', aliases: ['Quality'] },
             { name: 'notes', label: 'Notes', aliases: ['Remarks', 'Description'] },
+        ]
+    },
+    [COLLECTIONS.PURCHASE_CONTRACTS]: {
+        label: 'Purchase Contracts',
+        fields: [
+            { name: 'contract_number', label: 'Contract Number', required: true, aliases: ['Contract #', 'PO Number', 'ContractNo'] },
+            { name: 'supplier_id', label: 'Supplier', required: true, resolveFrom: COLLECTIONS.SUPPLIERS, aliases: ['Vendor', 'Farmer'] },
+            { name: 'commodity_type_id', label: 'Commodity Type', required: true, resolveFrom: COLLECTIONS.COMMODITY_TYPES, aliases: ['Commodity', 'Type'] },
+            { name: 'contract_date', label: 'Contract Date', required: true, type: 'date', aliases: ['Date'] },
+            { name: 'contracted_quantity', label: 'Quantity', required: true, type: 'number', aliases: ['Qty', 'Tons', 'Weight'] },
+            { name: 'price_per_ton', label: 'Price Per Ton', required: true, type: 'number', aliases: ['Rate', 'Price'] },
+            { name: 'currency', label: 'Currency', defaultValue: 'NGN' },
+            { name: 'status', label: 'Status', defaultValue: 'DRAFT', options: ['DRAFT', 'ACTIVE', 'COMPLETED', 'CANCELLED'] },
+        ]
+    },
+    [COLLECTIONS.SALES_CONTRACTS]: {
+        label: 'Sales Contracts',
+        fields: [
+            { name: 'contract_number', label: 'Contract Number', required: true, aliases: ['Contract #', 'Sales Order', 'SO Number'] },
+            { name: 'buyer_id', label: 'Buyer', required: true, resolveFrom: COLLECTIONS.BUYERS, aliases: ['Customer', 'Client'] },
+            { name: 'commodity_type_id', label: 'Commodity Type', required: true, resolveFrom: COLLECTIONS.COMMODITY_TYPES, aliases: ['Commodity', 'Type'] },
+            { name: 'contract_date', label: 'Contract Date', required: true, type: 'date', aliases: ['Date'] },
+            { name: 'contracted_quantity', label: 'Quantity', required: true, type: 'number', aliases: ['Qty', 'Tons', 'Weight'] },
+            { name: 'price_per_ton', label: 'Price Per Ton', required: true, type: 'number', aliases: ['Rate', 'Price'] },
+            { name: 'currency', label: 'Currency', defaultValue: 'USD' },
+            { name: 'status', label: 'Status', defaultValue: 'DRAFT', options: ['DRAFT', 'ACTIVE', 'COMPLETED', 'CANCELLED'] },
         ]
     },
     [COLLECTIONS.SUPPLIERS]: {
@@ -163,6 +190,8 @@ export class IngestionService {
                 (data || []).forEach((item: any) => {
                     if (item.name) map.set(this.normalize(item.name), item.id);
                     if (item.code) map.set(this.normalize(item.code), item.id);
+                    if (item.contract_number) map.set(this.normalize(item.contract_number), item.id);
+                    if (item.contract_no) map.set(this.normalize(item.contract_no), item.id);
                 });
                 this.cache[field.resolveFrom] = map;
             }
