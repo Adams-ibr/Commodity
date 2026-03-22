@@ -27,6 +27,15 @@ CREATE TABLE IF NOT EXISTS companies (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Migration for existing companies table
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS registration_number TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS tax_id TEXT;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS address JSONB;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS contact_info JSONB;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS business_settings JSONB;
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS base_currency TEXT DEFAULT 'NGN';
+ALTER TABLE companies ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+
 -- Enhanced Users Table with department support
 CREATE TABLE IF NOT EXISTS users (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -43,6 +52,15 @@ CREATE TABLE IF NOT EXISTS users (
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Migration for existing users table
+ALTER TABLE users ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id);
+ALTER TABLE users ADD COLUMN IF NOT EXISTS department TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS location_id UUID;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS branch_id UUID;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT NOW();
 
 -- Branches and Cost Centers
 CREATE TABLE IF NOT EXISTS branches (
@@ -70,8 +88,15 @@ CREATE TABLE IF NOT EXISTS locations (
   is_active BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
--
-- =====================================================
+
+-- Migration for existing locations table
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id);
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS branch_id UUID;
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS code TEXT;
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS capacity_tons DECIMAL(15,3);
+ALTER TABLE locations ADD COLUMN IF NOT EXISTS manager_id UUID;
+
+-- =====================================================
 -- COMMODITY MASTER DATA
 -- =====================================================
 
@@ -173,8 +198,9 @@ CREATE TABLE IF NOT EXISTS advance_payments (
   reference_number TEXT,
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
-);-- =========
-============================================
+);
+
+-- =====================================================
 -- BATCH TRACKING AND INVENTORY
 -- =====================================================
 
@@ -270,8 +296,9 @@ CREATE TABLE IF NOT EXISTS quality_certificates (
   certificate_url TEXT,
   is_valid BOOLEAN DEFAULT true,
   created_at TIMESTAMPTZ DEFAULT NOW()
-);-
-- =====================================================
+);
+
+-- =====================================================
 -- PROCESSING AND PRODUCTION
 -- =====================================================
 
@@ -361,8 +388,9 @@ CREATE TABLE IF NOT EXISTS sales_contracts (
   status TEXT DEFAULT 'ACTIVE',
   created_by UUID REFERENCES users(id),
   created_at TIMESTAMPTZ DEFAULT NOW()
-);-- Shipmen
-ts
+);
+
+-- Shipments
 CREATE TABLE IF NOT EXISTS shipments (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   company_id UUID REFERENCES companies(id),
@@ -446,8 +474,9 @@ CREATE TABLE IF NOT EXISTS journal_entry_lines (
   description TEXT,
   line_number INTEGER,
   created_at TIMESTAMPTZ DEFAULT NOW()
-);-
-- =====================================================
+);
+
+-- =====================================================
 -- FOREIGN EXCHANGE MANAGEMENT
 -- =====================================================
 
@@ -542,8 +571,19 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   ip_address INET,
   user_agent TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
-);-- ===
-==================================================
+);
+
+-- Migration for existing audit_logs table
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS company_id UUID REFERENCES companies(id);
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS table_name TEXT;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS record_id UUID;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS old_values JSONB;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS new_values JSONB;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS ip_address INET;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS user_agent TEXT;
+ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS user_role TEXT;
+
+-- =====================================================
 -- INDEXES FOR PERFORMANCE
 -- =====================================================
 
@@ -604,8 +644,9 @@ ALTER TABLE exchange_rates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE letters_of_credit ENABLE ROW LEVEL SECURITY;
 ALTER TABLE export_compliance ENABLE ROW LEVEL SECURITY;
 ALTER TABLE documents ENABLE ROW LEVEL SECURITY;
-ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;-- =
-====================================================
+ALTER TABLE audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- =====================================================
 -- BASIC POLICIES (Development - Allow all access)
 -- =====================================================
 -- Note: In production, these should be restricted based on company_id and user roles
@@ -674,8 +715,9 @@ BEGIN
   
   RETURN batch_number;
 END;
-$$ LANGUAGE plpgsql;-
-- Function to calculate FIFO inventory valuation
+$$ LANGUAGE plpgsql;
+
+-- Function to calculate FIFO inventory valuation
 CREATE OR REPLACE FUNCTION calculate_fifo_cost(
   p_commodity_type_id UUID,
   p_quantity DECIMAL

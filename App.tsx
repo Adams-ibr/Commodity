@@ -35,7 +35,8 @@ import {
   Target,
   BookOpen,
   ShieldCheck,
-  CheckCircle
+  CheckCircle,
+  Database
 } from 'lucide-react';
 
 import { WarehouseManager } from './components/WarehouseManager';
@@ -58,6 +59,7 @@ import { UserManagement } from './components/UserManagement';
 import { InvoiceManager } from './components/InvoiceManager';
 import { CacheStatus } from './components/CacheStatus';
 import { OfflineStatus } from './components/OfflineStatus';
+import { ExcelIngestionEngine } from './components/ExcelIngestionEngine';
 import { SignIn } from './components/SignIn';
 import { useAuth } from './context/AuthContext';
 import { UserRole, User } from './types_commodity';
@@ -152,6 +154,8 @@ function App() {
         return <CommodityMasterManager userRole={currentUser.role} onAuditLog={addAuditLog} />;
       case 'invoices':
         return <InvoiceManager userRole={currentUser.role} onAuditLog={addAuditLog} />;
+      case 'ingestion':
+        return <ExcelIngestionEngine onAuditLog={addAuditLog} />;
       default:
         return <div className="text-center p-10 text-slate-500">Module under construction</div>;
     }
@@ -217,6 +221,7 @@ function App() {
             <p className="px-4 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">System Management</p>
             {(currentUser.role === UserRole.SUPER_ADMIN || currentUser.role === UserRole.ADMIN) && (
               <>
+                <NavItem id="ingestion" label="Smart Ingestion" icon={Database} />
                 <NavItem id="users" label="User Management" icon={Users} />
                 <NavItem id="documents" label="Document Library" icon={FileText} />
                 <NavItem id="audit" label="Audit Trail" icon={AlertTriangle} />

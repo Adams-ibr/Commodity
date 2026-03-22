@@ -256,6 +256,28 @@ export async function dbGet<T = any>(
     }
 }
 
+export async function dbCreateBulk<T = any>(
+    table: string,
+    rows: Record<string, any>[]
+): Promise<{ data: T[] | null; error: string | null }> {
+    try {
+        const { data, error } = await supabase
+            .from(table)
+            .insert(rows)
+            .select();
+
+        if (error) {
+            console.error(`[dbCreateBulk] ${table}:`, error.message);
+            return { data: null, error: error.message };
+        }
+
+        return { data: (data || []).map(normalizeRow) as T[], error: null };
+    } catch (err: any) {
+        console.error(`[dbCreateBulk] ${table}:`, err.message || err);
+        return { data: null, error: err.message || 'Unknown error' };
+    }
+}
+
 export async function dbCreate<T = any>(
     table: string,
     rowData: Record<string, any>,
