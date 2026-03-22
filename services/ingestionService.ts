@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { dbCreateBulk, dbList, COLLECTIONS, Query } from './supabaseDb';
+import { dbCreateBulk, dbList, dbCreate, COLLECTIONS, Query } from './supabaseDb';
 
 export interface IngestionField {
     name: string;
@@ -10,6 +10,7 @@ export interface IngestionField {
     options?: string[];
     defaultValue?: any;
     resolveFrom?: string; // Table name to resolve name -> id
+    autoCreate?: boolean; // If true, create missing reference instead of failing
 }
 
 export interface IngestionSchema {
@@ -36,7 +37,8 @@ export const INGESTION_SCHEMAS: Record<string, IngestionSchema> = {
         label: 'Commodity Batches',
         fields: [
             { name: 'batch_number', label: 'Batch Number', required: true, aliases: ['Batch #', 'Batch No', 'BatchNo', 'Code'] },
-            { name: 'commodity_type_id', label: 'Commodity Type', required: true, resolveFrom: COLLECTIONS.COMMODITY_TYPES, aliases: ['Commodity', 'Type'] },
+            { name: 'category_name', label: 'Commodity Category', aliases: ['Category', 'Group', 'Class'] },
+            { name: 'commodity_type_id', label: 'Commodity Type', required: true, resolveFrom: COLLECTIONS.COMMODITY_TYPES, autoCreate: true, aliases: ['Commodity', 'Type', 'Item'] },
             { name: 'supplier_id', label: 'Supplier', required: true, resolveFrom: COLLECTIONS.SUPPLIERS, aliases: ['Vendor', 'Farmer'] },
             { name: 'purchase_contract_id', label: 'Purchase Contract', resolveFrom: COLLECTIONS.PURCHASE_CONTRACTS, aliases: ['Contract #', 'Contract Number', 'PO Number', 'Purchase Contract'] },
             { name: 'location_id', label: 'Location', required: true, resolveFrom: COLLECTIONS.LOCATIONS, aliases: ['Warehouse', 'Storage'] },
@@ -196,6 +198,73 @@ export class IngestionService {
                 this.cache[field.resolveFrom] = map;
             }
         }
+    }
+
+    /**
+     * Prepare ingestion by provisioning missing master data (Categories, Types)
+     */
+    async prepareAndProvision(schemaKey: string, rawData: any[], mappings: FieldMapping[]): Promise<{ success: boolean; error?: string }> {
+        const schema = INGESTION_SCHEMAS[schemaKey];
+        if (!schema) return { success: true };
+
+        // We only support auto-provisioning for commodity_batches right now
+        if (schemaKey !== COLLECTIONS.COMMODITY_BATCHES) return { success: true };
+
+        const categoryMapping = mappings.find(m => m.targetField === 'category_name');
+        const typeMapping = mappings.find(m => m.targetField === 'commodity_type_id');
+
+        if (!typeMapping || !typeMapping.sourceColumn) return { success: true };
+
+        // Ensure categories are loaded in cache
+        if (!this.cache[COLLECTIONS.COMMODITY_CATEGORIES]) {
+            const { data } = await dbList(COLLECTIONS.COMMODITY_CATEGORIES);
+            const map = new Map<string, string>();
+            (data || []).forEach((item: any) => map.set(this.normalize(item.name), item.id));
+            this.cache[COLLECTIONS.COMMODITY_CATEGORIES] = map;
+        }
+
+        const missingTypes = new Map<string, string>(); // typeName -> categoryName
+
+        rawData.forEach(row => {
+            const typeName = row[typeMapping.sourceColumn];
+            if (!typeName) return;
+
+            const normalizedType = this.normalize(typeName);
+            if (!this.cache[COLLECTIONS.COMMODITY_TYPES]?.has(normalizedType)) {
+                const categoryName = categoryMapping ? row[categoryMapping.sourceColumn] : 'General';
+                missingTypes.set(typeName, categoryName || 'General');
+            }
+        });
+
+        for (const [typeName, categoryName] of missingTypes.entries()) {
+            let categoryId = this.cache[COLLECTIONS.COMMODITY_CATEGORIES].get(this.normalize(categoryName));
+
+            if (!categoryId) {
+                // Create Category
+                const { data: newCat, error: catErr } = await dbCreate(COLLECTIONS.COMMODITY_CATEGORIES, {
+                    company_id: DEFAULT_COMPANY_ID,
+                    name: categoryName,
+                    description: 'Auto-created during ingestion',
+                    is_active: true
+                });
+                if (catErr || !newCat) return { success: false, error: `Failed to create category ${categoryName}: ${catErr}` };
+                categoryId = (newCat as any).id;
+                this.cache[COLLECTIONS.COMMODITY_CATEGORIES].set(this.normalize(categoryName), categoryId!);
+            }
+
+            // Create Commodity Type
+            const { data: newType, error: typeErr } = await dbCreate(COLLECTIONS.COMMODITY_TYPES, {
+                company_id: DEFAULT_COMPANY_ID,
+                category_id: categoryId,
+                name: typeName,
+                code: typeName.substring(0, 3).toUpperCase() + Math.floor(Math.random() * 1000),
+                is_active: true
+            });
+            if (typeErr || !newType) return { success: false, error: `Failed to create commodity type ${typeName}: ${typeErr}` };
+            this.cache[COLLECTIONS.COMMODITY_TYPES].set(this.normalize(typeName), (newType as any).id);
+        }
+
+        return { success: true };
     }
 
     /**

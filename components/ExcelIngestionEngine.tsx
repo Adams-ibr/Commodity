@@ -72,10 +72,25 @@ export const ExcelIngestionEngine: React.FC<ExcelIngestionEngineProps> = ({ onAu
         ));
     };
 
-    const proceedToPreview = () => {
-        const transformed = ingestionService.transformData(rawData, mappings, selectedTable);
-        setTransformedData(transformed);
-        setCurrentStep('preview');
+    const proceedToPreview = async () => {
+        setIsProcessing(true);
+        try {
+            // Auto-provision missing master data (Categories/Types) if needed
+            const provision = await ingestionService.prepareAndProvision(selectedTable, rawData, mappings);
+            if (!provision.success) {
+                alert(provision.error || 'Failed to provision master data');
+                return;
+            }
+
+            const transformed = ingestionService.transformData(rawData, mappings, selectedTable);
+            setTransformedData(transformed);
+            setCurrentStep('preview');
+        } catch (err) {
+            console.error('Preprocessing error:', err);
+            alert('Failed to prepare data for preview.');
+        } finally {
+            setIsProcessing(false);
+        }
     };
 
     const startIngestion = async () => {
