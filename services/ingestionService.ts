@@ -38,32 +38,34 @@ export const INGESTION_SCHEMAS: Record<string, IngestionSchema> = {
         fields: [
             { name: 'batch_number', label: 'Batch Number', required: true, aliases: ['Batch #', 'Batch No', 'BatchNo', 'Code'] },
             { name: 'category_name', label: 'Commodity Category', aliases: ['Category', 'Group', 'Class'] },
-            { name: 'commodity_type_id', label: 'Commodity Type', required: true, resolveFrom: COLLECTIONS.COMMODITY_TYPES, autoCreate: true, aliases: ['Commodity', 'Type', 'Item'] },
-            { name: 'supplier_id', label: 'Supplier', required: true, resolveFrom: COLLECTIONS.SUPPLIERS, aliases: ['Vendor', 'Farmer'] },
-            { name: 'purchase_contract_id', label: 'Purchase Contract', resolveFrom: COLLECTIONS.PURCHASE_CONTRACTS, aliases: ['Contract #', 'Contract Number', 'PO Number', 'Purchase Contract'] },
-            { name: 'location_id', label: 'Location', required: true, resolveFrom: COLLECTIONS.LOCATIONS, aliases: ['Warehouse', 'Storage'] },
-            { name: 'received_date', label: 'Received Date', required: true, type: 'date', aliases: ['Date', 'ReceivedAt'] },
-            { name: 'received_weight', label: 'Received Weight', required: true, type: 'number', aliases: ['Weight', 'Qty', 'Quantity', 'Net Weight', 'Gross Weight', 'Tons', 'Metric Tons'] },
+            { name: 'commodity_type_id', label: 'Commodity Type', required: true, resolveFrom: COLLECTIONS.COMMODITY_TYPES, autoCreate: true, aliases: ['Commodity', 'Type', 'Item', 'Product'] },
+            { name: 'supplier_id', label: 'Supplier', required: true, resolveFrom: COLLECTIONS.SUPPLIERS, aliases: ['Vendor', 'Farmer', 'Supplier Name'] },
+            { name: 'purchase_contract_id', label: 'Purchase Contract', resolveFrom: COLLECTIONS.PURCHASE_CONTRACTS, aliases: ['Contract #', 'Contract Number', 'PO Number', 'Purchase Contract', 'SOYA CONTRACTS', 'CASHEW CONTRACTS', 'SESAME CONTRACTS'] },
+            { name: 'location_id', label: 'Location', required: true, resolveFrom: COLLECTIONS.LOCATIONS, aliases: ['Warehouse', 'Storage', 'Origin', 'Location Name'] },
+            { name: 'received_date', label: 'Received Date', required: true, type: 'date', aliases: ['Date', 'ReceivedAt', 'Contract Date'] },
+            { name: 'received_weight', label: 'Received Weight', required: true, type: 'number', aliases: ['Weight', 'Qty', 'Quantity', 'Net Weight', 'Gross Weight', 'Tons', 'Metric Tons', 'Contract Given(MT)'] },
             { name: 'current_weight', label: 'Current Weight', required: true, type: 'number', aliases: ['Current Qty', 'Remaining Weight', 'Stock Qty'] },
-            { name: 'cost_per_ton', label: 'Cost Per Ton', type: 'number', aliases: ['Price', 'Rate', 'Unit Cost', 'Buying Price'] },
+            { name: 'cost_per_ton', label: 'Cost Per Ton', type: 'number', aliases: ['Price', 'Rate', 'Unit Cost', 'Buying Price', 'Price/KG'] },
             { name: 'currency', label: 'Currency', defaultValue: 'NGN', aliases: ['Curr', 'Currency Code'] },
             { name: 'truck_number', label: 'Truck Number', aliases: ['Truck', 'Vehicle'] },
             { name: 'driver_name', label: 'Driver Name', aliases: ['Driver'] },
             { name: 'grade', label: 'Grade', aliases: ['Quality'] },
-            { name: 'notes', label: 'Notes', aliases: ['Remarks', 'Description'] },
+            { name: 'notes', label: 'Notes', aliases: ['Remarks', 'Description', 'Remark'] },
         ]
     },
     [COLLECTIONS.PURCHASE_CONTRACTS]: {
         label: 'Purchase Contracts',
         fields: [
-            { name: 'contract_number', label: 'Contract Number', required: true, aliases: ['Contract #', 'PO Number', 'ContractNo'] },
-            { name: 'supplier_id', label: 'Supplier', required: true, resolveFrom: COLLECTIONS.SUPPLIERS, aliases: ['Vendor', 'Farmer'] },
-            { name: 'commodity_type_id', label: 'Commodity Type', required: true, resolveFrom: COLLECTIONS.COMMODITY_TYPES, aliases: ['Commodity', 'Type'] },
+            { name: 'contract_number', label: 'Contract Number', required: true, aliases: ['Contract #', 'PO Number', 'ContractNo', 'SOYA CONTRACTS', 'CASHEW CONTRACTS', 'SESAME CONTRACTS'] },
+            { name: 'supplier_id', label: 'Supplier', required: true, resolveFrom: COLLECTIONS.SUPPLIERS, aliases: ['Vendor', 'Farmer', 'Supplier Name'] },
+            { name: 'commodity_type_id', label: 'Commodity Type', required: true, resolveFrom: COLLECTIONS.COMMODITY_TYPES, aliases: ['Commodity', 'Type', 'Item'] },
             { name: 'contract_date', label: 'Contract Date', required: true, type: 'date', aliases: ['Date'] },
-            { name: 'contracted_quantity', label: 'Quantity', required: true, type: 'number', aliases: ['Qty', 'Tons', 'Weight'] },
-            { name: 'price_per_ton', label: 'Price Per Ton', required: true, type: 'number', aliases: ['Rate', 'Price'] },
+            { name: 'contracted_quantity', label: 'Quantity', required: true, type: 'number', aliases: ['Qty', 'Tons', 'Weight', 'Contract Given(MT)'] },
+            { name: 'price_per_ton', label: 'Price Per Ton', required: true, type: 'number', aliases: ['Rate', 'Price', 'Price/KG'] },
+            { name: 'total_value', label: 'Total Value', type: 'number', aliases: ['Total Sum', 'Cost (Millions)', 'Total Cost'] },
             { name: 'currency', label: 'Currency', defaultValue: 'NGN' },
             { name: 'status', label: 'Status', defaultValue: 'DRAFT', options: ['DRAFT', 'ACTIVE', 'COMPLETED', 'CANCELLED'] },
+            { name: 'notes', label: 'Notes', aliases: ['Remarks', 'Description', 'Remark'] },
         ]
     },
     [COLLECTIONS.SALES_CONTRACTS]: {
@@ -114,9 +116,9 @@ export class IngestionService {
     }
 
     /**
-     * Parse an Excel/CSV file
+     * Parse an Excel/CSV file and automatically find the best header row
      */
-    async parseFile(file: File): Promise<{ columns: string[], data: any[] }> {
+    async parseFile(file: File, schemaKey?: string): Promise<{ columns: string[], data: any[] }> {
         return new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onload = (e) => {
@@ -125,23 +127,43 @@ export class IngestionService {
                     const workbook = XLSX.read(data, { type: 'array' });
                     const firstSheetName = workbook.SheetNames[0];
                     const worksheet = workbook.Sheets[firstSheetName];
-                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                    const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 }) as any[][];
 
                     if (jsonData.length === 0) {
                         resolve({ columns: [], data: [] });
                         return;
                     }
 
-                    const columns = (jsonData[0] as any[]).map(c => String(c || '').trim());
-                    const rows = jsonData.slice(1).map((row: any) => {
+                    // Smart Header Detection: Find the row with the most column matches for the schema
+                    let headerIndex = 0;
+                    if (schemaKey) {
+                        const schema = INGESTION_SCHEMAS[schemaKey];
+                        const aliases = schema.fields.flatMap(f => [f.name, f.label, ...(f.aliases || [])].map(a => this.normalize(a)));
+
+                        let maxMatches = -1;
+                        // Search first 10 rows
+                        const searchLimit = Math.min(10, jsonData.length);
+                        for (let i = 0; i < searchLimit; i++) {
+                            const row = jsonData[i];
+                            const matches = row.filter(cell => cell && aliases.includes(this.normalize(String(cell)))).length;
+                            if (matches > maxMatches) {
+                                maxMatches = matches;
+                                headerIndex = i;
+                            }
+                        }
+                    }
+
+                    const columns = (jsonData[headerIndex] as any[]).map(c => String(c || '').trim());
+                    // Filter out rows before header and the header row itself
+                    const rows = jsonData.slice(headerIndex + 1).map((row: any) => {
                         const rowObj: any = {};
                         columns.forEach((col, index) => {
-                            rowObj[col] = row[index];
+                            if (col) rowObj[col] = row[index];
                         });
                         return rowObj;
                     });
 
-                    resolve({ columns, data: rows });
+                    resolve({ columns: columns.filter(Boolean), data: rows });
                 } catch (err) {
                     reject(err);
                 }

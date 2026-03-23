@@ -50,7 +50,8 @@ export const ExcelIngestionEngine: React.FC<ExcelIngestionEngineProps> = ({ onAu
             // First load necessary reference data for intelligent ID resolution
             await ingestionService.loadReferences(selectedTable);
 
-            const { columns: cols, data: rows } = await ingestionService.parseFile(selectedFile);
+            // Pass selectedTable for smart header detection (handles merged cells/blueprints)
+            const { columns: cols, data: rows } = await ingestionService.parseFile(selectedFile, selectedTable);
             setColumns(cols);
             setRawData(rows);
 
