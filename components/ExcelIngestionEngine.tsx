@@ -12,7 +12,8 @@ import {
     Search,
     Check,
     X,
-    Loader2
+    Loader2,
+    Download
 } from 'lucide-react';
 import { COLLECTIONS } from '../services/supabaseDb';
 import { ingestionService, INGESTION_SCHEMAS, FieldMapping, IngestionResult } from '../services/ingestionService';
