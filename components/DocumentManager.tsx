@@ -215,28 +215,32 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
             </div>
 
             {/* Summary Cards */}
-            {Object.keys(typeCounts).length > 0 && (
-                <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2">
+                <button
+                    onClick={() => setFilterType('')}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${!filterType ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                >
+                    All ({documents.length})
+                </button>
+                <button
+                    onClick={() => setFilterType('TEMPLATES')}
+                    className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${filterType === 'TEMPLATES' ? 'bg-indigo-600 text-white' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
+                >
+                    System Templates (6)
+                </button>
+                {Object.entries(typeCounts).map(([type, count]) => (
                     <button
-                        onClick={() => setFilterType('')}
-                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${!filterType ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                        key={type}
+                        onClick={() => setFilterType(filterType === type ? '' : type)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${filterType === type
+                            ? 'bg-slate-800 text-white'
+                            : (DOCTYPE_COLORS[type] || 'bg-slate-100 text-slate-600') + ' hover:opacity-80'
+                            }`}
                     >
-                        All ({documents.length})
+                        {DOCTYPE_LABELS[type] || type} ({count})
                     </button>
-                    {Object.entries(typeCounts).map(([type, count]) => (
-                        <button
-                            key={type}
-                            onClick={() => setFilterType(filterType === type ? '' : type)}
-                            className={`px-3 py-1.5 rounded-full text-xs font-semibold transition-colors ${filterType === type
-                                ? 'bg-slate-800 text-white'
-                                : (DOCTYPE_COLORS[type] || 'bg-slate-100 text-slate-600') + ' hover:opacity-80'
-                                }`}
-                        >
-                            {DOCTYPE_LABELS[type] || type} ({count})
-                        </button>
-                    ))}
-                </div>
-            )}
+                ))}
+            </div>
 
             {/* Search */}
             <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
@@ -268,6 +272,56 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
+                            {/* System Templates (Static) */}
+                            {filterType === 'TEMPLATES' && [
+                                { name: 'sample_commodity_batches.xlsx', label: 'Commodity Batches Template' },
+                                { name: 'sample_purchase_contracts.xlsx', label: 'Purchase Contracts Template' },
+                                { name: 'sample_sales_contracts.xlsx', label: 'Sales Contracts Template' },
+                                { name: 'sample_suppliers.xlsx', label: 'Suppliers/Farmers Template' },
+                                { name: 'sample_buyers.xlsx', label: 'Buyers/Customers Template' },
+                                { name: 'sample_advanced_workbook.xlsx', label: 'Advanced Multi-Sheet Template' }
+                            ].map((tpl, i) => (
+                                <tr key={`tpl-${i}`} className="bg-indigo-50/30 hover:bg-indigo-50 transition-colors">
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="p-2 bg-white rounded-lg border border-indigo-100">
+                                                <FileSpreadsheet className="w-5 h-5 text-indigo-500" />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <p className="font-bold text-slate-800 truncate">{tpl.label}</p>
+                                                <p className="text-xs text-indigo-500 font-medium">System Template</p>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <span className="inline-flex px-2.5 py-1 text-xs font-bold rounded-full bg-indigo-100 text-indigo-700">
+                                            TEMPLATE
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4 text-sm text-slate-500 italic">Global</td>
+                                    <td className="px-6 py-4 text-sm text-slate-600">~20 KB</td>
+                                    <td className="px-6 py-4">
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-indigo-100 text-indigo-600 text-xs font-semibold rounded">
+                                            v1.0
+                                        </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="text-sm text-slate-600">System</div>
+                                        <div className="text-xs text-slate-400">Fixed</div>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <a
+                                            href={`/samples/${tpl.name}`}
+                                            download
+                                            className="inline-flex p-2 text-indigo-600 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-indigo-200"
+                                            title="Download Template"
+                                        >
+                                            <Download className="w-4 h-4" />
+                                        </a>
+                                    </td>
+                                </tr>
+                            ))}
+
                             {filteredDocs.map((doc) => (
                                 <tr key={doc.id} className="hover:bg-slate-50 transition-colors">
                                     <td className="px-6 py-4">
@@ -320,7 +374,7 @@ export const DocumentManager: React.FC<DocumentManagerProps> = ({
                                     </td>
                                 </tr>
                             ))}
-                            {filteredDocs.length === 0 && (
+                            {filteredDocs.length === 0 && filterType !== 'TEMPLATES' && (
                                 <tr>
                                     <td colSpan={7} className="px-6 py-12 text-center text-slate-400">
                                         <FileText className="w-12 h-12 mx-auto mb-3 text-slate-200" />

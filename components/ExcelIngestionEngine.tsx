@@ -210,26 +210,49 @@ export const ExcelIngestionEngine: React.FC<ExcelIngestionEngineProps> = ({ onAu
                             </div>
                         </div>
 
-                        <div
-                            onClick={() => fileInputRef.current?.click()}
-                            className="border-2 border-dashed border-slate-200 rounded-2xl p-12 hover:border-indigo-400 hover:bg-indigo-50/30 transition-all cursor-pointer group"
-                        >
-                            <input
-                                type="file"
-                                ref={fileInputRef}
-                                onChange={handleFileChange}
-                                accept=".xlsx,.xls,.csv"
-                                className="hidden"
-                            />
-                            <div className="flex flex-col items-center">
-                                <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
-                                    <Upload className="w-8 h-8 text-slate-400 group-hover:text-indigo-600" />
+                        <div className="flex flex-col items-center space-y-6">
+                            <div
+                                onClick={() => fileInputRef.current?.click()}
+                                className="w-full border-2 border-dashed border-slate-200 rounded-2xl p-12 hover:border-indigo-400 hover:bg-indigo-50/30 transition-all cursor-pointer group"
+                            >
+                                <input
+                                    type="file"
+                                    ref={fileInputRef}
+                                    onChange={handleFileChange}
+                                    accept=".xlsx,.xls,.csv"
+                                    className="hidden"
+                                />
+                                <div className="flex flex-col items-center">
+                                    <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 group-hover:scale-110 transition-transform duration-300">
+                                        <Upload className="w-8 h-8 text-slate-400 group-hover:text-indigo-600" />
+                                    </div>
+                                    <h3 className="text-lg font-bold text-slate-800">Drop your file here</h3>
+                                    <p className="text-slate-500 mt-2 max-w-xs">Supports Excel (.xlsx, .xls) and CSV files. Max 10MB.</p>
+                                    <div className="mt-6 px-6 py-2 bg-indigo-600 text-white rounded-lg font-semibold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-colors">
+                                        Select File
+                                    </div>
                                 </div>
-                                <h3 className="text-lg font-bold text-slate-800">Drop your file here</h3>
-                                <p className="text-slate-500 mt-2 max-w-xs">Supports Excel (.xlsx, .xls) and CSV files. Max 10MB.</p>
-                                <div className="mt-6 px-6 py-2 bg-indigo-600 text-white rounded-lg font-semibold shadow-lg shadow-indigo-100 hover:bg-indigo-700 transition-colors">
-                                    Select File
+                            </div>
+
+                            {/* Download Template Section */}
+                            <div className="w-full p-4 bg-slate-50 rounded-xl border border-slate-100 flex items-center justify-between">
+                                <div className="flex items-center space-x-3">
+                                    <div className="p-2 bg-white rounded-lg border border-slate-200">
+                                        <FileSpreadsheet className="w-5 h-5 text-emerald-600" />
+                                    </div>
+                                    <div className="text-left">
+                                        <p className="text-sm font-bold text-slate-700">Need a template?</p>
+                                        <p className="text-xs text-slate-500">Download the sample file for {INGESTION_SCHEMAS[selectedTable].label}</p>
+                                    </div>
                                 </div>
+                                <a
+                                    href={`/samples/sample_${selectedTable.toLowerCase()}.xlsx`}
+                                    download
+                                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 rounded-lg text-sm font-bold hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center space-x-2"
+                                >
+                                    <Download className="w-4 h-4" />
+                                    <span>Download Template</span>
+                                </a>
                             </div>
                         </div>
                     </div>
