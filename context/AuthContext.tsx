@@ -7,6 +7,7 @@ interface AuthContextType {
     user: AuthUser | null;
     loading: boolean;
     signIn: (email: string, password: string) => Promise<void>;
+    signInWithGoogle: () => Promise<void>;
     signOut: () => Promise<void>;
 }
 
@@ -14,6 +15,7 @@ const AuthContext = createContext<AuthContextType>({
     user: null,
     loading: true,
     signIn: async () => { },
+    signInWithGoogle: async () => { },
     signOut: async () => { },
 });
 
@@ -47,13 +49,18 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
         setUser(authUser);
     };
 
+    const signInWithGoogle = async () => {
+        const authUser = await authService.signInWithGoogle();
+        setUser(authUser);
+    };
+
     const signOut = async () => {
         await authService.signOut();
         setUser(null);
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, signIn, signOut }}>
+        <AuthContext.Provider value={{ user, loading, signIn, signInWithGoogle, signOut }}>
             {children}
         </AuthContext.Provider>
     );

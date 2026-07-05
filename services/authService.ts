@@ -11,6 +11,8 @@ import {
     signOut as firebaseSignOut,
     createUserWithEmailAndPassword,
     sendPasswordResetEmail,
+    signInWithPopup,
+    GoogleAuthProvider,
     getAuth,
 } from 'firebase/auth';
 import { firebaseAuth } from './firebaseClient';
@@ -225,6 +227,50 @@ async function resetUserPassword(email: string): Promise<boolean> {
     }
 }
 
+// ── signInWithGoogle ─────────────────────────────────────────────
+// Opens a Google sign-in popup. On success, looks up or auto-creates
+// the Firestore users profile, then returns the AuthUser.
+async function signInWithGoogle(): Promise<AuthUser> {
+    const provider = new GoogleAuthProvider();
+    let uid: string;
+    let email: string;
+    let displayName: string;
+
+    try {
+        const credential = await signInWithPopup(firebaseAuth, provider);
+        uid = credential.user.uid;
+        email = credential.user.email ?? '';
+        displayName = credential.user.displayName ?? email;
+    } catch (err: any) {
+        throw new Error(err?.message ?? 'Google sign in failed');
+    }
+
+    // Look up existing Firestore profile
+    const { data: profile } = await dbGet(COLLECTIONS.USERS, uid);
+    if (profile) {
+        return {
+            id: profile.$id || profile.id,
+            email: profile.email,
+            name: profile.name || profile.full_name,
+            role: profile.role as UserRole,
+            locationId: profile.location_id || profile.locationId,
+        };
+    }
+
+    // Auto-create profile for new Google users
+    const isAdmin = email === PRIMARY_ADMIN_EMAIL;
+    const role = isAdmin ? UserRole.SUPER_ADMIN : UserRole.OPERATOR;
+    const name = displayName || (isAdmin ? 'Galaltix Nig Ltd' : email);
+
+    await dbCreate(
+        COLLECTIONS.USERS,
+        { email, name, role, is_active: true, company_id: '00000000-0000-0000-0000-000000000001' },
+        uid
+    );
+
+    return { id: uid, email, name, role };
+}
+
 // ── Task 5.6: export — no Supabase imports anywhere in this file ─
 export const authService = {
     signIn,
@@ -233,4 +279,5 @@ export const authService = {
     getCurrentUser,
     updateUserProfile,
     resetUserPassword,
+    signInWithGoogle,
 };

@@ -66,7 +66,7 @@ import { UserRole, User } from './types_commodity';
 import { api } from './services/api';
 
 function App() {
-  const { user: currentUser, loading: authLoading, signIn, signOut } = useAuth();
+  const { user: currentUser, loading: authLoading, signIn, signInWithGoogle, signOut } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
@@ -94,7 +94,23 @@ function App() {
   }
 
   if (!currentUser) {
-    return <SignIn onSignIn={signIn} />;
+    const handleSignIn = async (email: string, password: string): Promise<string | null> => {
+      try {
+        await signIn(email, password);
+        return null;
+      } catch (err: any) {
+        return err?.message ?? 'Sign in failed';
+      }
+    };
+    const handleGoogleSignIn = async (): Promise<string | null> => {
+      try {
+        await signInWithGoogle();
+        return null;
+      } catch (err: any) {
+        return err?.message ?? 'Google sign in failed';
+      }
+    };
+    return <SignIn onSignIn={handleSignIn} onSignInWithGoogle={handleGoogleSignIn} />;
   }
 
   // Common NavItem Component
