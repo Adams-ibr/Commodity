@@ -1,8 +1,8 @@
 // =====================================================
 // SALES SERVICE — SUPABASE
 // =====================================================
-import { dbList, dbGet, dbCreate, dbUpdate, Query } from './supabaseDb';
-import { COLLECTIONS } from './supabaseDb';
+import { dbList, dbGet, dbCreate, dbUpdate, Query } from './firestoreDb';
+import { COLLECTIONS } from './firestoreDb';
 import {
     Buyer, BuyerType, SalesContract, ContractStatus,
     Shipment, ShipmentStatus, ApiResponse, Address,

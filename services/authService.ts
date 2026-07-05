@@ -1,10 +1,24 @@
 // =====================================================
-// AUTH SERVICE — SUPABASE
+// AUTH SERVICE — FIREBASE AUTH
 // =====================================================
-import { supabase } from './supabaseClient';
-import { dbList, dbCreate, dbUpdate, Query } from './supabaseDb';
-import { COLLECTIONS } from './supabaseDb';
+// Replaces all Supabase Auth calls with Firebase Auth SDK.
+// The exported `authService` object keeps the same shape
+// so no call sites need to change.
+// =====================================================
+
+import {
+    signInWithEmailAndPassword,
+    signOut as firebaseSignOut,
+    createUserWithEmailAndPassword,
+    sendPasswordResetEmail,
+    getAuth,
+} from 'firebase/auth';
+import { firebaseAuth } from './firebaseClient';
+import { dbGet, dbCreate, dbUpdate, dbList, COLLECTIONS, Query } from './firestoreDb';
 import { User, UserRole } from '../types_commodity';
+
+// ── Primary admin email (preserved from original implementation) ──
+const PRIMARY_ADMIN_EMAIL = 'admin@galaltixnig.com';
 
 export interface AuthUser {
     id: string;
@@ -14,16 +28,35 @@ export interface AuthUser {
     locationId?: string;
 }
 
+// ── Task 5.1: signIn ─────────────────────────────────────────────
+// Uses Firebase signInWithEmailAndPassword. On error, throws an
+// Error with the Firebase Auth error message.
 async function signIn(email: string, password: string): Promise<AuthUser> {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw new Error(error.message);
+    let uid: string;
+    try {
+        const credential = await signInWithEmailAndPassword(firebaseAuth, email, password);
+        uid = credential.user.uid;
+    } catch (err: any) {
+        throw new Error(err?.message ?? 'Sign in failed');
+    }
 
-    const acct = data.user;
+    // Look up Firestore users profile by Firebase UID (document ID)
+    const { data: profile } = await dbGet(COLLECTIONS.USERS, uid);
 
-    // Look up user profile in our users table
+    if (profile) {
+        return {
+            id: profile.$id || profile.id,
+            email: profile.email,
+            name: profile.name || profile.full_name,
+            role: profile.role as UserRole,
+            locationId: profile.location_id || profile.locationId,
+        };
+    }
+
+    // Fallback: look up by email (handles migrated accounts where doc ID may differ)
     const { data: users } = await dbList(COLLECTIONS.USERS, [
         Query.equal('email', email),
-        Query.limit(1)
+        Query.limit(1),
     ]);
 
     if (users && users.length > 0) {
@@ -37,62 +70,91 @@ async function signIn(email: string, password: string): Promise<AuthUser> {
         };
     }
 
-    // Fallback: return Supabase account info with default role
+    // No profile found — return basic info from Firebase Auth
+    const firebaseUser = getAuth().currentUser;
+    const isAdmin = email === PRIMARY_ADMIN_EMAIL;
     return {
-        id: acct.id,
-        email: acct.email || email,
-        name: acct.user_metadata?.full_name || email,
-        role: UserRole.OPERATOR,
+        id: uid,
+        email,
+        name: firebaseUser?.displayName || (isAdmin ? 'Galaltix Nig Ltd' : email),
+        role: isAdmin ? UserRole.SUPER_ADMIN : UserRole.OPERATOR,
     };
 }
 
-async function signUp(email: string, password: string, name: string, role: UserRole = UserRole.OPERATOR): Promise<AuthUser> {
-    const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: { data: { full_name: name } }
-    });
-    if (error) throw new Error(error.message);
+// ── Task 5.3: signUp ─────────────────────────────────────────────
+// Creates the Firebase Auth user, then creates a corresponding
+// profile document in the Firestore `users` collection.
+async function signUp(
+    email: string,
+    password: string,
+    name: string,
+    role: UserRole = UserRole.OPERATOR
+): Promise<AuthUser> {
+    let uid: string;
+    try {
+        const credential = await createUserWithEmailAndPassword(firebaseAuth, email, password);
+        uid = credential.user.uid;
+    } catch (err: any) {
+        throw new Error(err?.message ?? 'Sign up failed');
+    }
 
-    const acct = data.user;
-    if (!acct) throw new Error('Sign up failed — no user returned');
+    // Create Firestore profile document keyed by Firebase UID
+    await dbCreate(
+        COLLECTIONS.USERS,
+        {
+            email,
+            full_name: name,
+            name,
+            role,
+            is_active: true,
+            company_id: '00000000-0000-0000-0000-000000000001',
+        },
+        uid
+    );
 
-    // Create user profile in our users table
-    await dbCreate(COLLECTIONS.USERS, {
-        email,
-        full_name: name,
-        name,
-        role,
-        is_active: true,
-        auth_id: acct.id,
-        company_id: '00000000-0000-0000-0000-000000000001',
-    });
-
-    return {
-        id: acct.id,
-        email,
-        name,
-        role,
-    };
+    return { id: uid, email, name, role };
 }
 
+// ── Task 5.2: signOut ────────────────────────────────────────────
 async function signOut(): Promise<void> {
     try {
-        await supabase.auth.signOut();
+        await firebaseSignOut(firebaseAuth);
     } catch (err) {
         console.error('Error signing out:', err);
     }
 }
 
+// ── Task 5.4: getCurrentUser ─────────────────────────────────────
+// 1. Get firebaseAuth.currentUser
+// 2. If null → return null
+// 3. Look up Firestore users profile by Firebase UID
+// 4. If no profile → auto-create with role OPERATOR (SUPER_ADMIN for primary admin)
+// 5. Return AuthUser
 async function getCurrentUser(): Promise<AuthUser | null> {
     try {
-        const { data: { user: acct } } = await supabase.auth.getUser();
-        if (!acct) return null;
+        const firebaseUser = firebaseAuth.currentUser;
+        if (!firebaseUser) return null;
 
-        // Look up user profile
+        const uid = firebaseUser.uid;
+        const email = firebaseUser.email ?? '';
+
+        // Look up profile by UID (document ID)
+        const { data: profile } = await dbGet(COLLECTIONS.USERS, uid);
+
+        if (profile) {
+            return {
+                id: profile.$id || profile.id,
+                email: profile.email,
+                name: profile.name || profile.full_name,
+                role: profile.role as UserRole,
+                locationId: profile.location_id || profile.locationId,
+            };
+        }
+
+        // No profile by UID — try email lookup for migrated accounts
         const { data: users } = await dbList(COLLECTIONS.USERS, [
-            Query.equal('email', acct.email || ''),
-            Query.limit(1)
+            Query.equal('email', email),
+            Query.limit(1),
         ]);
 
         if (users && users.length > 0) {
@@ -106,36 +168,41 @@ async function getCurrentUser(): Promise<AuthUser | null> {
             };
         }
 
-        // No profile row found — auto-create for the primary admin
-        const isAdmin = acct.email === 'admin@galaltixnig.com';
+        // Task 5.4 / Req 4.5: Auto-create profile with OPERATOR role
+        // (SUPER_ADMIN for primary admin email)
+        const isAdmin = email === PRIMARY_ADMIN_EMAIL;
         const role = isAdmin ? UserRole.SUPER_ADMIN : UserRole.OPERATOR;
-        const name = acct.user_metadata?.full_name || (isAdmin ? 'Galaltix Nig Ltd' : acct.email || '');
+        const name =
+            firebaseUser.displayName || (isAdmin ? 'Galaltix Nig Ltd' : email);
 
         try {
-            await dbCreate(COLLECTIONS.USERS, {
-                email: acct.email,
-                name,
-                role,
-                is_active: true,
-                auth_id: acct.id,
-                company_id: '00000000-0000-0000-0000-000000000001',
-            });
+            await dbCreate(
+                COLLECTIONS.USERS,
+                {
+                    email,
+                    name,
+                    role,
+                    is_active: true,
+                    company_id: '00000000-0000-0000-0000-000000000001',
+                },
+                uid
+            );
         } catch (createErr) {
             console.warn('Auto-create user profile failed:', createErr);
         }
 
-        return {
-            id: acct.id,
-            email: acct.email || '',
-            name,
-            role,
-        };
+        return { id: uid, email, name, role };
     } catch {
         return null;
     }
 }
 
-async function updateUserProfile(userId: string, updates: Partial<User>): Promise<boolean> {
+// ── updateUserProfile ────────────────────────────────────────────
+// Unchanged — already uses dbUpdate from firestoreDb
+async function updateUserProfile(
+    userId: string,
+    updates: Partial<User>
+): Promise<boolean> {
     const payload: any = {};
     if (updates.name) payload.name = updates.name;
     if (updates.role) payload.role = updates.role;
@@ -145,22 +212,20 @@ async function updateUserProfile(userId: string, updates: Partial<User>): Promis
     return !error;
 }
 
-async function resetUserPassword(authId: string, newPassword: string): Promise<boolean> {
+// ── Task 5.5: resetUserPassword ──────────────────────────────────
+// Replaced Supabase Admin password reset with Firebase
+// sendPasswordResetEmail (email-based flow).
+async function resetUserPassword(email: string): Promise<boolean> {
     try {
-        const { error } = await supabase.auth.admin.updateUserById(authId, {
-            password: newPassword
-        });
-        if (error) {
-            console.error('Error resetting password:', error.message);
-            return false;
-        }
+        await sendPasswordResetEmail(firebaseAuth, email);
         return true;
-    } catch (err) {
-        console.error('Password reset failed:', err);
+    } catch (err: any) {
+        console.error('Password reset failed:', err?.message ?? err);
         return false;
     }
 }
 
+// ── Task 5.6: export — no Supabase imports anywhere in this file ─
 export const authService = {
     signIn,
     signUp,

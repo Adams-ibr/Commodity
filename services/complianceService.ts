@@ -1,8 +1,8 @@
 // =====================================================
 // COMPLIANCE SERVICE — SUPABASE
 // =====================================================
-import { dbList, dbCreate, dbUpdate, dbGet, Query } from './supabaseDb';
-import { COLLECTIONS } from './supabaseDb';
+import { dbList, dbCreate, dbUpdate, dbGet, Query } from './firestoreDb';
+import { COLLECTIONS } from './firestoreDb';
 import { ExportCompliance, ComplianceStatus, ApiResponse } from '../types_commodity';
 
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';

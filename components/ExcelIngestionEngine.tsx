@@ -2,7 +2,7 @@ import React, { useState, useRef } from 'react';
 import {
     FileSpreadsheet, Download, Upload, CheckCircle2, AlertCircle, ArrowRight, RefreshCcw, Table as TableIcon, ChevronRight, Database, Search, Check, X, Loader2
 } from 'lucide-react';
-import { COLLECTIONS } from '../services/supabaseDb';
+import { COLLECTIONS } from '../services/firestoreDb';
 import { ingestionService, INGESTION_SCHEMAS, FieldMapping, IngestionResult } from '../services/ingestionService';
 
 interface ExcelIngestionEngineProps {

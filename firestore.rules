@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      // TODO(production): restrict reads/writes by company_id and user role
+      // e.g. allow read: if request.auth != null && resource.data.company_id == request.auth.token.company_id;
+      // e.g. allow write: if request.auth != null && request.auth.token.role in ['Admin', 'Manager'];
+      allow read, write: if request.auth != null;
+    }
+  }
+}

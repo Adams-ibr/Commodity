@@ -1,5 +1,5 @@
 // =====================================================
-// API REGISTRY — SUPABASE
+// API REGISTRY
 // =====================================================
 
 export interface AuditLogEntry {
@@ -12,8 +12,7 @@ export interface AuditLogEntry {
     ipHash?: string;
 }
 
-import { dbList, dbCreate, dbUpdate, dbDelete, Query, ID } from './supabaseDb';
-import { COLLECTIONS } from './supabaseDb';
+import { dbList, dbGet, dbCreate, dbUpdate, dbDelete, Query, ID, COLLECTIONS } from './firestoreDb';
 import { UserRole, Location } from '../types_commodity';
 import { ProcurementService } from './procurementService';
 import { CommodityMasterService } from './commodityMasterService';
@@ -269,8 +268,13 @@ export const api = {
             return success;
         },
 
-        async resetPassword(authId: string, newPassword: string) {
-            return authService.resetUserPassword(authId, newPassword);
+        async resetPassword(authId: string, _newPassword?: string) {
+            // Firebase uses email-based password reset (no direct password set)
+            // Look up the user document to get their email, then send a reset email
+            const { data: userDoc } = await dbGet(COLLECTIONS.USERS, authId);
+            const email = userDoc?.email;
+            if (!email) return false;
+            return authService.resetUserPassword(email);
         },
 
         async getStats(users: any[]) {
