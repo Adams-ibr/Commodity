@@ -19,7 +19,13 @@ import { firebaseAuth } from './firebaseClient';
 import { dbGet, dbCreate, dbUpdate, dbList, COLLECTIONS, Query } from './firestoreDb';
 import { User, UserRole } from '../types_commodity';
 
-// ── Primary admin email (preserved from original implementation) ──
+// ── Super Admin emails — these accounts get role SUPER_ADMIN on first login ──
+const SUPER_ADMIN_EMAILS = new Set([
+    'admin@galaltixnig.com',
+    'tucoramirez31@gmail.com',
+]);
+
+// Keep backward-compat alias used in a few places below
 const PRIMARY_ADMIN_EMAIL = 'admin@galaltixnig.com';
 
 export interface AuthUser {
@@ -74,7 +80,7 @@ async function signIn(email: string, password: string): Promise<AuthUser> {
 
     // No profile found — return basic info from Firebase Auth
     const firebaseUser = getAuth().currentUser;
-    const isAdmin = email === PRIMARY_ADMIN_EMAIL;
+    const isAdmin = SUPER_ADMIN_EMAILS.has(email);
     return {
         id: uid,
         email,
@@ -171,8 +177,8 @@ async function getCurrentUser(): Promise<AuthUser | null> {
         }
 
         // Task 5.4 / Req 4.5: Auto-create profile with OPERATOR role
-        // (SUPER_ADMIN for primary admin email)
-        const isAdmin = email === PRIMARY_ADMIN_EMAIL;
+        // (SUPER_ADMIN for super admin emails)
+        const isAdmin = SUPER_ADMIN_EMAILS.has(email);
         const role = isAdmin ? UserRole.SUPER_ADMIN : UserRole.OPERATOR;
         const name =
             firebaseUser.displayName || (isAdmin ? 'Galaltix Nig Ltd' : email);
@@ -258,10 +264,9 @@ async function signInWithGoogle(): Promise<AuthUser> {
     }
 
     // Auto-create profile for new Google users
-    const isAdmin = email === PRIMARY_ADMIN_EMAIL;
+    const isAdmin = SUPER_ADMIN_EMAILS.has(email);
     const role = isAdmin ? UserRole.SUPER_ADMIN : UserRole.OPERATOR;
     const name = displayName || (isAdmin ? 'Galaltix Nig Ltd' : email);
-
     await dbCreate(
         COLLECTIONS.USERS,
         { email, name, role, is_active: true, company_id: '00000000-0000-0000-0000-000000000001' },
