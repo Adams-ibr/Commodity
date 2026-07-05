@@ -28,8 +28,6 @@ class CacheManager {
   private lastClearTime: Date | null = null;
   private essentialKeys: string[] = [
     'auth-token',
-    'galaltix-auth-token',  // Supabase session token - CRITICAL for login persistence
-    'sb-hzigzdwxwtykjqypkiln-auth-token', // Alternative Supabase auth key format
     'user-preferences',
     'theme-settings',
     'language-setting',
@@ -202,6 +200,18 @@ class CacheManager {
   }
 
   /**
+   * Determines whether a localStorage key should be preserved during cache clearing.
+   * Preserves keys in the essentialKeys list, Firebase Auth user tokens, and all
+   * other Firebase keys (e.g. refresh tokens).
+   */
+  private isEssentialKey(key: string): boolean {
+    if (this.essentialKeys.includes(key)) return true;
+    if (key.startsWith('firebase:authUser:')) return true;
+    if (key.startsWith('firebase:')) return true; // covers refresh tokens
+    return false;
+  }
+
+  /**
    * Clear localStorage while preserving essential data
    */
   private async clearLocalStorage(): Promise<void> {
@@ -210,7 +220,7 @@ class CacheManager {
 
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && !this.essentialKeys.includes(key)) {
+        if (key && !this.isEssentialKey(key)) {
           keysToRemove.push(key);
         }
       }

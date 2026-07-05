@@ -1,8 +1,8 @@
 // =====================================================
 // DOCUMENT SERVICE — SUPABASE
 // =====================================================
-import { dbList, dbGet, dbCreate, dbUpdate, dbDelete, Query } from './supabaseDb';
-import { COLLECTIONS } from './supabaseDb';
+import { dbList, dbGet, dbCreate, dbUpdate, dbDelete, Query } from './firestoreDb';
+import { COLLECTIONS } from './firestoreDb';
 import { ApiResponse, SalesContract, Buyer, Shipment, DocumentType } from '../types_commodity';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';

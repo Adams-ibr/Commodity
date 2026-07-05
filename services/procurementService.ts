@@ -1,8 +1,8 @@
 // =====================================================
 // PROCUREMENT SERVICE — SUPABASE
 // =====================================================
-import { dbList, dbGet, dbCreate, dbUpdate, Query } from './supabaseDb';
-import { COLLECTIONS } from './supabaseDb';
+import { dbList, dbGet, dbCreate, dbUpdate, Query } from './firestoreDb';
+import { COLLECTIONS } from './firestoreDb';
 import {
   Supplier, SupplierType, PurchaseContract, ContractStatus,
   ValidationResult, ValidationError, ApiResponse, BankDetails, TaxInfo,

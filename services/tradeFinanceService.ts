@@ -1,8 +1,8 @@
 // =====================================================
 // TRADE FINANCE SERVICE — SUPABASE
 // =====================================================
-import { dbList, dbCreate, dbUpdate, Query } from './supabaseDb';
-import { COLLECTIONS } from './supabaseDb';
+import { dbList, dbCreate, dbUpdate, Query } from './firestoreDb';
+import { COLLECTIONS } from './firestoreDb';
 import { LetterOfCredit, LetterOfCreditStatus, ApiResponse } from '../types_commodity';
 
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';

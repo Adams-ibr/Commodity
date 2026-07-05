@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { COLLECTIONS, dbCreate, dbCreateBulk, dbList, Query } from './supabaseDb';
+import { COLLECTIONS, dbCreate, dbCreateBulk, dbList, Query } from './firestoreDb';
 
 /**
  * Specialized Excel Ingestion Engine for Commodity ERP

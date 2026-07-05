@@ -24,3 +24,12 @@ dist-ssr
 *.sw?
 .vercel
 starter-for-react/
+
+# Environment variable files
+.env
+.env.local
+.env.*.local
+
+# Firebase service account credentials — never commit these
+serviceAccountKey.json
+*serviceAccount*.json

@@ -1,6 +1,30 @@
-import { createClient } from '@supabase/supabase-js';
+import { initializeApp, getApps, getApp, cert } from 'firebase-admin/app';
+import { getFirestore } from 'firebase-admin/firestore';
 
-// This API route is called by Vercel Cron to keep Supabase database active
+// Lazy singleton initialisation — guard against double-init on hot-reload
+function getAdminApp() {
+    if (getApps().length > 0) {
+        return getApp();
+    }
+
+    const projectId = process.env.FIREBASE_PROJECT_ID;
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY
+        ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
+        : undefined;
+
+    if (!projectId || !clientEmail || !privateKey) {
+        throw new Error(
+            'Missing Firebase Admin credentials. Ensure FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY are set.'
+        );
+    }
+
+    return initializeApp({
+        credential: cert({ projectId, clientEmail, privateKey }),
+    });
+}
+
+// This API route is called by Vercel Cron to keep Firestore active
 export default async function handler(req, res) {
     // Verify this is a cron request (optional security)
     const authHeader = req.headers.authorization;
@@ -10,27 +34,13 @@ export default async function handler(req, res) {
     }
 
     try {
-        const supabase = createClient(
-            process.env.VITE_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL,
-            process.env.VITE_SUPABASE_ANON_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-        );
+        const app = getAdminApp();
+        const adminDb = getFirestore(app);
 
-        // Simple query to keep database active
-        const { data, error } = await supabase
-            .from('users')
-            .select('id')
-            .limit(1);
+        // Lightweight Firestore read to keep the function warm
+        await adminDb.collection('users').limit(1).get();
 
-        if (error) {
-            console.error('Ping failed:', error);
-            return res.status(500).json({
-                success: false,
-                error: error.message,
-                timestamp: new Date().toISOString()
-            });
-        }
-
-        console.log('Database ping successful at:', new Date().toISOString());
+        console.log('Firestore ping successful at:', new Date().toISOString());
 
         return res.status(200).json({
             success: true,

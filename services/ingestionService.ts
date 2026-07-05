@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { dbCreateBulk, dbList, dbCreate, COLLECTIONS, Query } from './supabaseDb';
+import { dbCreateBulk, dbList, dbCreate, COLLECTIONS, Query } from './firestoreDb';
 
 export interface IngestionField {
     name: string;

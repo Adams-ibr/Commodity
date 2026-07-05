@@ -1,8 +1,7 @@
 // =====================================================
-// COMMODITY MASTER UTILS — SUPABASE
+// COMMODITY MASTER UTILS
 // =====================================================
-import { dbList, Query } from './supabaseDb';
-import { COLLECTIONS } from './supabaseDb';
+import { dbList, Query, COLLECTIONS } from './firestoreDb';
 import { CommodityCategory, CommodityType, ApiResponse } from '../types_commodity';
 
 const DEFAULT_COMPANY_ID = '00000000-0000-0000-0000-000000000001';
