@@ -53,7 +53,7 @@ console.log('[firebaseClient] appId:', firebaseConfig.appId);
 
 export const firebaseApp: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
 
-export const firestoreDb: Firestore = getFirestore(firebaseApp);
+export const firestoreDb: Firestore = getFirestore(firebaseApp, '(default)');
 
 export const firebaseAuth: Auth = getAuth(firebaseApp);
 
