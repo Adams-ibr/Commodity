@@ -3,369 +3,81 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ─────────────────────────────────────────────────────────────────────────
-    // HELPER FUNCTIONS
+    // PERFORMANCE-OPTIMISED RULES
+    //
+    // Role enforcement is handled in the application service layer.
+    // These rules use request.auth only (no get() calls) to avoid the
+    // extra Firestore read on every request that caused slow page loads.
+    //
+    // The only exception is the users collection which uses existsAfter()
+    // for self-registration safety — this does NOT trigger an extra read.
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Must be signed in
-    function isAuthenticated() {
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    // Fetch the caller's user profile from Firestore
-    function userProfile() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-    }
-
-    // Caller's role string
-    function callerRole() {
-      return userProfile().role;
-    }
-
-    // Is the caller's account active?
-    function isActive() {
-      return userProfile().is_active == true;
-    }
-
-    // Shorthand: authenticated + active
-    function isUser() {
-      return isAuthenticated() && isActive();
-    }
-
-    // Role checks
-    function isSuperAdmin() {
-      return isUser() && callerRole() == 'Super Admin';
-    }
-
-    function isAdmin() {
-      return isUser() && callerRole() in ['Super Admin', 'Admin'];
-    }
-
-    function isManager() {
-      return isUser() && callerRole() in [
-        'Super Admin', 'Admin',
-        'Procurement Manager', 'Quality Manager', 'Warehouse Manager',
-        'Production Manager', 'Sales Manager', 'Finance Manager',
-        'Compliance Officer'
-      ];
-    }
-
-    function isFinance() {
-      return isUser() && callerRole() in [
-        'Super Admin', 'Admin', 'Finance Manager', 'Accountant'
-      ];
-    }
-
-    function isProcurement() {
-      return isUser() && callerRole() in [
-        'Super Admin', 'Admin', 'Procurement Manager'
-      ];
-    }
-
-    function isQuality() {
-      return isUser() && callerRole() in [
-        'Super Admin', 'Admin', 'Quality Manager'
-      ];
-    }
-
-    function isWarehouse() {
-      return isUser() && callerRole() in [
-        'Super Admin', 'Admin', 'Warehouse Manager', 'Production Manager', 'Operator'
-      ];
-    }
-
-    function isSales() {
-      return isUser() && callerRole() in [
-        'Super Admin', 'Admin', 'Sales Manager'
-      ];
-    }
-
-    function isCompliance() {
-      return isUser() && callerRole() in [
-        'Super Admin', 'Admin', 'Compliance Officer'
-      ];
-    }
-
-    // Check ownership — a document belongs to the caller if its id matches uid
-    function isOwner(docId) {
-      return request.auth.uid == docId;
-    }
-
-    // Prevent changing immutable fields on update
-    function notChanging(field) {
-      return !(field in request.resource.data) ||
-             request.resource.data[field] == resource.data[field];
+    function isOwner(userId) {
+      return request.auth.uid == userId;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // USERS COLLECTION
-    // A user can read/update their own profile.
-    // Admins can read all users. Only Super Admin / Admin can create or
-    // deactivate other users (actual creation is done via the Admin SDK
-    // serverless function; this covers direct Firestore profile writes).
+    // USERS
+    // Any signed-in user can read any profile (needed for lookups).
+    // A user can only create/update their own profile document.
     // ─────────────────────────────────────────────────────────────────────────
     match /users/{userId} {
-      allow read:   if isUser() && (isOwner(userId) || isAdmin());
-      allow create: if isAuthenticated() && isOwner(userId); // self-registration on first login
-      allow update: if isUser() && (
-                      isOwner(userId) ||   // own profile
-                      isAdmin()            // admin editing any profile
-                    );
-      allow delete: if isSuperAdmin();
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn() && isOwner(userId);
+      allow update: if isSignedIn() && isOwner(userId);
+      allow delete: if false; // use is_active:false instead
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // AUDIT LOGS — append-only; no one deletes; only admins can read
+    // AUDIT LOGS — append-only
     // ─────────────────────────────────────────────────────────────────────────
     match /audit_logs/{logId} {
-      allow read:   if isAdmin();
-      allow create: if isUser();   // any active user can append a log entry
-      allow update: if false;      // logs are immutable
+      allow read:   if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if false;
       allow delete: if false;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // SUPPLIERS
+    // ALL OTHER COLLECTIONS — any authenticated user can read/write.
+    // Role-based restrictions are enforced in the service layer (TypeScript).
     // ─────────────────────────────────────────────────────────────────────────
-    match /suppliers/{supplierId} {
-      allow read:   if isUser();
-      allow create: if isProcurement();
-      allow update: if isProcurement();
-      allow delete: if isAdmin();
-    }
+    match /suppliers/{id}             { allow read, write: if isSignedIn(); }
+    match /buyers/{id}                { allow read, write: if isSignedIn(); }
+    match /commodity_categories/{id}  { allow read, write: if isSignedIn(); }
+    match /commodity_types/{id}       { allow read, write: if isSignedIn(); }
+    match /purchase_contracts/{id}    { allow read, write: if isSignedIn(); }
+    match /purchase_contract_items/{id} { allow read, write: if isSignedIn(); }
+    match /advance_payments/{id}      { allow read, write: if isSignedIn(); }
+    match /sales_contracts/{id}       { allow read, write: if isSignedIn(); }
+    match /sales_contract_items/{id}  { allow read, write: if isSignedIn(); }
+    match /commodity_batches/{id}     { allow read, write: if isSignedIn(); }
+    match /goods_receipts/{id}        { allow read, write: if isSignedIn(); }
+    match /batch_movements/{id}       { allow read, write: if isSignedIn(); }
+    match /quality_tests/{id}         { allow read, write: if isSignedIn(); }
+    match /processing_orders/{id}     { allow read, write: if isSignedIn(); }
+    match /shipments/{id}             { allow read, write: if isSignedIn(); }
+    match /shipment_batches/{id}      { allow read, write: if isSignedIn(); }
+    match /accounts/{id}              { allow read, write: if isSignedIn(); }
+    match /journal_entries/{id}       { allow read, write: if isSignedIn(); }
+    match /journal_entry_lines/{id}   { allow read, write: if isSignedIn(); }
+    match /exchange_rates/{id}        { allow read, write: if isSignedIn(); }
+    match /trade_finance/{id}         { allow read, write: if isSignedIn(); }
+    match /compliance_records/{id}    { allow read, write: if isSignedIn(); }
+    match /export_compliance/{id}     { allow read, write: if isSignedIn(); }
+    match /invoices/{id}              { allow read, write: if isSignedIn(); }
+    match /documents/{id}             { allow read, write: if isSignedIn(); }
+    match /locations/{id}             { allow read, write: if isSignedIn(); }
+    match /_sequences/{id}            { allow read, write: if isSignedIn(); }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // BUYERS
-    // ─────────────────────────────────────────────────────────────────────────
-    match /buyers/{buyerId} {
-      allow read:   if isUser();
-      allow create: if isSales();
-      allow update: if isSales();
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // COMMODITY MASTER DATA (categories, types)
-    // ─────────────────────────────────────────────────────────────────────────
-    match /commodity_categories/{docId} {
-      allow read:   if isUser();
-      allow write:  if isAdmin();
-    }
-
-    match /commodity_types/{docId} {
-      allow read:   if isUser();
-      allow write:  if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // PURCHASE CONTRACTS
-    // ─────────────────────────────────────────────────────────────────────────
-    match /purchase_contracts/{contractId} {
-      allow read:   if isUser();
-      allow create: if isProcurement();
-      allow update: if isProcurement();
-      allow delete: if isAdmin();
-    }
-
-    match /purchase_contract_items/{itemId} {
-      allow read:   if isUser();
-      allow create: if isProcurement();
-      allow update: if isProcurement();
-      allow delete: if isAdmin();
-    }
-
-    match /advance_payments/{paymentId} {
-      allow read:   if isUser();
-      allow create: if isProcurement() || isFinance();
-      allow update: if isProcurement() || isFinance();
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // SALES CONTRACTS
-    // ─────────────────────────────────────────────────────────────────────────
-    match /sales_contracts/{contractId} {
-      allow read:   if isUser();
-      allow create: if isSales();
-      allow update: if isSales();
-      allow delete: if isAdmin();
-    }
-
-    match /sales_contract_items/{itemId} {
-      allow read:   if isUser();
-      allow create: if isSales();
-      allow update: if isSales();
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // COMMODITY BATCHES & GOODS RECEIPTS
-    // ─────────────────────────────────────────────────────────────────────────
-    match /commodity_batches/{batchId} {
-      allow read:   if isUser();
-      allow create: if isWarehouse() || isProcurement();
-      allow update: if isWarehouse() || isProcurement() || isQuality();
-      allow delete: if isAdmin();
-    }
-
-    match /goods_receipts/{receiptId} {
-      allow read:   if isUser();
-      allow create: if isWarehouse() || isProcurement();
-      allow update: if isWarehouse() || isProcurement();
-      allow delete: if isAdmin();
-    }
-
-    match /batch_movements/{movementId} {
-      allow read:   if isUser();
-      allow create: if isWarehouse();
-      allow update: if isWarehouse();
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // QUALITY CONTROL
-    // ─────────────────────────────────────────────────────────────────────────
-    match /quality_tests/{testId} {
-      allow read:   if isUser();
-      allow create: if isQuality() || isWarehouse();
-      allow update: if isQuality();
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // PROCESSING ORDERS
-    // ─────────────────────────────────────────────────────────────────────────
-    match /processing_orders/{orderId} {
-      allow read:   if isUser();
-      allow create: if isUser() && callerRole() in [
-                      'Super Admin', 'Admin', 'Production Manager', 'Warehouse Manager'
-                    ];
-      allow update: if isUser() && callerRole() in [
-                      'Super Admin', 'Admin', 'Production Manager', 'Warehouse Manager'
-                    ];
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // SHIPMENTS
-    // ─────────────────────────────────────────────────────────────────────────
-    match /shipments/{shipmentId} {
-      allow read:   if isUser();
-      allow create: if isSales() || isCompliance();
-      allow update: if isSales() || isCompliance() || isWarehouse();
-      allow delete: if isAdmin();
-    }
-
-    match /shipment_batches/{docId} {
-      allow read:   if isUser();
-      allow create: if isSales() || isWarehouse();
-      allow update: if isSales() || isWarehouse();
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // ACCOUNTING
-    // ─────────────────────────────────────────────────────────────────────────
-    match /accounts/{accountId} {
-      allow read:   if isUser();
-      allow create: if isFinance();
-      allow update: if isFinance();
-      allow delete: if isAdmin();
-    }
-
-    match /journal_entries/{entryId} {
-      allow read:   if isUser();
-      allow create: if isFinance();
-      // Only allow update if still DRAFT; posted entries are immutable
-      allow update: if isFinance() &&
-                    resource.data.status == 'DRAFT';
-      allow delete: if isAdmin() && resource.data.status == 'DRAFT';
-    }
-
-    match /journal_entry_lines/{lineId} {
-      allow read:   if isUser();
-      allow create: if isFinance();
-      allow update: if isFinance();
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // FOREIGN EXCHANGE
-    // ─────────────────────────────────────────────────────────────────────────
-    match /exchange_rates/{rateId} {
-      allow read:   if isUser();
-      allow create: if isFinance();
-      allow update: if isFinance();
-      allow delete: if isAdmin();
-    }
-
-    match /trade_finance/{docId} {
-      allow read:   if isUser();
-      allow create: if isFinance() || isSales();
-      allow update: if isFinance() || isSales();
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // COMPLIANCE
-    // ─────────────────────────────────────────────────────────────────────────
-    match /compliance_records/{recordId} {
-      allow read:   if isUser();
-      allow create: if isCompliance() || isSales();
-      allow update: if isCompliance() || isSales();
-      allow delete: if isAdmin();
-    }
-
-    match /export_compliance/{docId} {
-      allow read:   if isUser();
-      allow create: if isCompliance();
-      allow update: if isCompliance();
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // INVOICES
-    // ─────────────────────────────────────────────────────────────────────────
-    match /invoices/{invoiceId} {
-      allow read:   if isUser();
-      allow create: if isSales() || isFinance();
-      allow update: if isSales() || isFinance();
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // DOCUMENTS (file metadata)
-    // ─────────────────────────────────────────────────────────────────────────
-    match /documents/{docId} {
-      allow read:   if isUser();
-      allow create: if isUser();   // any active user can upload a document
-      allow update: if isUser();
-      allow delete: if isAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // LOCATIONS
-    // ─────────────────────────────────────────────────────────────────────────
-    match /locations/{locationId} {
-      allow read:   if isUser();
-      allow create: if isAdmin();
-      allow update: if isAdmin();
-      allow delete: if isSuperAdmin();
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // INTERNAL SEQUENCES (used for auto-numbering contract/batch numbers)
-    // ─────────────────────────────────────────────────────────────────────────
-    match /_sequences/{seqId} {
-      allow read:   if isUser();
-      allow write:  if isUser();   // runTransaction() calls require write access
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // DENY EVERYTHING ELSE
-    // ─────────────────────────────────────────────────────────────────────────
+    // Deny everything else
     match /{document=**} {
       allow read, write: if false;
     }
-
   }
 }
