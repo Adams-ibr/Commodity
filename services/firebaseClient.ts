@@ -44,6 +44,11 @@ const firebaseConfig = {
     appId: env['VITE_FIREBASE_APP_ID']!,
 };
 
+// --- Diagnostic log — visible in browser console ---
+console.log('[firebaseClient] Initialising with projectId:', firebaseConfig.projectId);
+console.log('[firebaseClient] authDomain:', firebaseConfig.authDomain);
+console.log('[firebaseClient] appId:', firebaseConfig.appId);
+
 // --- Singleton Initialisation (guard against double-init) ---
 
 export const firebaseApp: FirebaseApp = getApps().length ? getApp() : initializeApp(firebaseConfig);
@@ -51,3 +56,5 @@ export const firebaseApp: FirebaseApp = getApps().length ? getApp() : initialize
 export const firestoreDb: Firestore = getFirestore(firebaseApp);
 
 export const firebaseAuth: Auth = getAuth(firebaseApp);
+
+console.log('[firebaseClient] Firestore connected to project:', (firestoreDb as any)._databaseId?.projectId ?? 'unknown');
